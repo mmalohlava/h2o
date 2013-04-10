@@ -421,7 +421,7 @@ NEXT_CHAR:
         offset -= bits.length;
         tokenStart -= bits.length;
         long chkidx = ValueArray.getChunkIndex(key);
-        Value v = (secondChunk < 2 && chkidx+1 < _ary.chunks()) 
+        Value v = (secondChunk < 2 && chkidx+1 < _ary.chunks())
           ? DKV.get(_ary.getChunkKey(chkidx+1)) : null;
         // if we can't get further we might have been the last one and we must
         // commit the latest guy if we had one.
@@ -489,7 +489,7 @@ NEXT_CHAR:
    *  last one as it is used if all other fails because multiple spaces can be
    *  used as a single separator.
    */
-  private static byte[] separators = new byte[] { ',', ';', '|', '\t', 1/* '^A',  Hive table column separator */, ' '/*space is last in this list, because we allow multiple spaces*/ };
+  private static byte[] separators = new byte[] { 1/* '^A',  Hive table column separator */, ',', ';', '|', '\t',  ' '/*space is last in this list, because we allow multiple spaces*/ };
 
   /** Dermines the number of separators in given line. Correctly handles quoted
    * tokens.
@@ -597,7 +597,7 @@ NEXT_CHAR:
         } catch (NumberFormatException e) { /*Pass - determining if number is possible*/ }
       }
     }
-    
+
     // Return an array with headers in data[0] and the remaining rows pre-parsed.
     String[][] data = new String[lines.size()+(hasHeader?0:1)][];
     int l=0;
@@ -611,7 +611,7 @@ NEXT_CHAR:
     while( m < lines.size() )
       data[l++] = determineTokens(lines.get(m++), separator);
     assert data.length==l : data.length +" "+l+" has="+hasHeader;
-    
+
     return new Setup(separator, hasHeader, data, numlines, bits);
   }
 
