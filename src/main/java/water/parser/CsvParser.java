@@ -421,7 +421,7 @@ NEXT_CHAR:
         offset -= bits.length;
         tokenStart -= bits.length;
         long chkidx = ValueArray.getChunkIndex(key);
-        Value v = (secondChunk < 2 && chkidx+1 < _ary.chunks()) 
+        Value v = (secondChunk < 2 && chkidx+1 < _ary.chunks())
           ? DKV.get(_ary.getChunkKey(chkidx+1)) : null;
         // if we can't get further we might have been the last one and we must
         // commit the latest guy if we had one.
@@ -597,7 +597,7 @@ NEXT_CHAR:
         } catch (NumberFormatException e) { /*Pass - determining if number is possible*/ }
       }
     }
-    
+
     // Return an array with headers in data[0] and the remaining rows pre-parsed.
     String[][] data = new String[lines.size()+(hasHeader?0:1)][];
     int l=0;
@@ -611,7 +611,7 @@ NEXT_CHAR:
     while( m < lines.size() )
       data[l++] = determineTokens(lines.get(m++), separator);
     assert data.length==l : data.length +" "+l+" has="+hasHeader;
-    
+
     return new Setup(separator, hasHeader, data, numlines, bits);
   }
 
