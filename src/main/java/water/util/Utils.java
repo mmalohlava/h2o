@@ -42,6 +42,19 @@ public class Utils {
       if (from[i]>from[result]) result = i;
     return result;
   }
+  public static int maxIndex(byte[] from) {
+    int result = 0;
+    for (int i = 1; i<from.length; ++i)
+      if (from[i]>from[result]) result = i;
+    return result;
+  }
+
+  public static int max(int[] from) {
+    return from[maxIndex(from)];
+  }
+  public static int max(byte[] from) {
+    return from[maxIndex(from)];
+  }
 
   public static double lnF(double what) {
     return (what < 1e-06) ? 0 : what * Math.log(what);

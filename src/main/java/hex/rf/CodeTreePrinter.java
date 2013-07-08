@@ -9,6 +9,7 @@ import java.io.*;
 import water.AutoBuffer;
 import water.ValueArray.Column;
 import water.util.IndentingAppender;
+import water.util.Utils;
 
 
 public class CodeTreePrinter extends TreePrinter {
@@ -31,7 +32,7 @@ public class CodeTreePrinter extends TreePrinter {
   }
 
   void printNode(LeafNode t) throws IOException {
-    _dest.append("return ").append(Integer.toString(t._class)).append('\n');
+    _dest.append("return ").append(Integer.toString(Utils.max(t._classHisto))).append('\n');
   }
 
   void printNode(SplitNode t) throws IOException {
@@ -77,23 +78,24 @@ public class CodeTreePrinter extends TreePrinter {
       _dest.append("int classify(float fs[]) {\n");
       _dest.incrementIndent();
       new Tree.TreeVisitor<IOException>(tbits) {
-        public Tree.TreeVisitor leaf(int tclass ) throws IOException {
+        @Override public Tree.TreeVisitor leaf(byte[] classHisto ) throws IOException {
+        int tclass = Utils.maxIndex(classHisto);
         String x = _classNames != null && tclass < _classNames.length
             ? String.format("return %s;\n",_classNames[tclass])
             : String.format("return %d;\n",tclass);
           _dest.append(x);
           return this;
         }
-        protected Tree.TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) throws IOException {
+        @Override protected Tree.TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) throws IOException {
           byte b = (byte) _ts.get1(off0);
           _dest.append(String.format("if( fs[%s] %s %f ) \n",colNameConstant(col),((b=='E')?"==":"<="), fcmp)).incrementIndent();
           return this;
         }
-        protected Tree.TreeVisitor mid (int col, float fcmp ) throws IOException {
+        @Override protected Tree.TreeVisitor mid (int col, float fcmp ) throws IOException {
           _dest.decrementIndent().append("else\n").incrementIndent();
           return this;
         }
-        protected Tree.TreeVisitor post(int col, float fcmp ) throws IOException {
+        @Override protected Tree.TreeVisitor post(int col, float fcmp ) throws IOException {
           _dest.decrementIndent();
           return this;
         }

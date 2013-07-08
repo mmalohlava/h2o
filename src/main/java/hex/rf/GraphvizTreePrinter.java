@@ -6,9 +6,11 @@ import hex.rf.Tree.SplitNode;
 
 import java.io.*;
 import java.text.MessageFormat;
+import java.util.Arrays;
 
 import water.AutoBuffer;
 import water.ValueArray.Column;
+import water.util.Utils;
 
 
 public class GraphvizTreePrinter extends TreePrinter {
@@ -34,7 +36,7 @@ public class GraphvizTreePrinter extends TreePrinter {
     int obj = System.identityHashCode(t);
     _dest.append(String.format("%d [label=\"%s\\n%s\"];\n",
         obj, "Leaf Node",
-        MessageFormat.format("Class {0}", t._class)));
+        MessageFormat.format("Class {0}", Arrays.toString(t._classHisto) )));
   }
 
 
@@ -82,14 +84,15 @@ public class GraphvizTreePrinter extends TreePrinter {
     try {
       _dest.append("digraph {\n");
       new Tree.TreeVisitor<IOException>(tbits) {
-        protected Tree.TreeVisitor leaf(int tclass ) throws IOException {
+        @Override protected Tree.TreeVisitor leaf(byte[] classHisto ) throws IOException {
+          int tclass = Utils.maxIndex(classHisto);
           String x = _classNames != null && tclass < _classNames.length
-            ? String.format("%d [label=\"%s\"];\n"      , _ts.position()-2, _classNames[tclass])
-            : String.format("%d [label=\"Class %d\"];\n", _ts.position()-2, tclass);
+            ? String.format("%d [label=\"%s\n%s\"];\n"      , _ts.position()-_classes-1, _classNames[tclass], Arrays.toString(classHisto))
+            : String.format("%d [label=\"Majority Class %d\n%s\"];\n", _ts.position()-_classes-1, tclass, Arrays.toString(classHisto));
           _dest.append(x);
           return this;
         }
-        protected Tree.TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) throws IOException {
+        @Override protected Tree.TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) throws IOException {
           byte b = (byte) _ts.get1(off0);
           _dest.append(String.format("%d [label=\"%s %s %f\"];\n",
                                      off0, _cols[col]._name, ((b=='E')?"==":"<="), fcmp));

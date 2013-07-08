@@ -47,7 +47,7 @@ public class RandomForest {
     for (int i = 0; i < ntrees; ++i) {
       long treeSeed = rnd.nextLong() + TREE_SEED_INIT; // make sure that enough bits is initialized
       trees[i] = new Tree(job, data, drfParams._depth, drfParams._stat, numSplitFeatures, treeSeed,
-                          i, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose);
+                          i, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize);
       if (!drfParams._parallel)   ForkJoinTask.invokeAll(new Tree[]{trees[i]});
     }
 
@@ -81,6 +81,7 @@ public class RandomForest {
     int     classcol      = -1;
     int     features      = -1;
     int     parallel      = 1;
+    int     nodesize      = 1;
     boolean outOfBagError = true;
     boolean stratify      = false;
     String  strata;
@@ -194,7 +195,8 @@ public class RandomForest {
                           /* FIXME strata*/ null,
                           ARGS.verbose,
                           ARGS.exclusive,
-                          false);
+                          false,
+                          ARGS.nodesize);
     RFModel model = drfJob.get();  // block on all nodes!
     Log.debug(Sys.RANDF,"Random forest finished in TODO"/*+ drf._t_main*/);
 

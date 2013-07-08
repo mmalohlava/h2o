@@ -39,13 +39,14 @@ public class Tree extends H2OCountedCompleter {
   ThreadLocal<Statistic>[] _stats  = new ThreadLocal[2];
   final Job      _job;          // DRF job building this tree
   final long     _seed;         // Pseudo random seed: used to playback sampling
+  final int      _nodesize;     // Minimal nodesize to decide about node to become a leaf (stop splitting if we get down to this number of records)
   int            _exclusiveSplitLimit;
   int            _verbose;
 
   /**
    * Constructor used to define the specs when building the tree from the top.
    */
-  public Tree(final Job job, final Data data, int maxDepth, StatType stat, int numSplitFeatures, long seed, int treeId, int exclusiveSplitLimit, final Sampling sampler, int verbose) {
+  public Tree(final Job job, final Data data, int maxDepth, StatType stat, int numSplitFeatures, long seed, int treeId, int exclusiveSplitLimit, final Sampling sampler, int verbose, int nodesize) {
     _job              = job;
     _data             = data;
     _type             = stat;
@@ -56,6 +57,7 @@ public class Tree extends H2OCountedCompleter {
     _sampler          = sampler;
     _exclusiveSplitLimit = exclusiveSplitLimit;
     _verbose          = verbose;
+    _nodesize         = nodesize;
   }
 
   // Oops, uncaught exception
@@ -113,7 +115,7 @@ public class Tree extends H2OCountedCompleter {
       left.applyClassWeights();   // Weight the distributions
       Statistic.Split spl = left.split(d, false);
       _tree = spl.isLeafNode()
-        ? new LeafNode(_data.unmapClass(spl._split), d.rows())
+        ? new LeafNode(_data.histogram(), d.rows())
         : new FJBuild (spl, d, 0, _seed).compute();
 
       if (_verbose > 1)  Log.info(Sys.RANDF,computeStatistics().toString());
@@ -161,13 +163,13 @@ public class Tree extends H2OCountedCompleter {
         new SplitNode    (c, s, _data.colName(c), _data.unmap(c,s));
       _data.filter(nd,res,left,rite);
       FJBuild fj0 = null, fj1 = null;
-      Statistic.Split ls = left.split(res[0], _depth >= _maxDepth); // get the splits
-      Statistic.Split rs = rite.split(res[1], _depth >= _maxDepth);
+      Statistic.Split ls = left.split(res[0], _depth >= _maxDepth || res[0].rows() <= _nodesize); // get the splits
+      Statistic.Split rs = rite.split(res[1], _depth >= _maxDepth || res[0].rows() <= _nodesize);
       if (ls.isLeafNode() || ls.isImpossible())
-            nd._l = new LeafNode(_data.unmapClass(ls._split), res[0].rows()); // create leaf nodes if any
+            nd._l = new LeafNode(res[0].histogram(), res[0].rows()); // create leaf nodes if any
       else  fj0 = new FJBuild(ls,res[0],_depth+1, _seed + LTS_INIT);
       if (rs.isLeafNode() || rs.isImpossible())
-            nd._r = new LeafNode(_data.unmapClass(rs._split), res[1].rows());
+            nd._r = new LeafNode(res[1].histogram(), res[1].rows());
       else  fj1 = new  FJBuild(rs,res[1],_depth+1, _seed - RTS_INIT);
       // Recursively build the splits, in parallel
       if (_data.rows() > ROWS_FORK_TRESHOLD) {
@@ -190,7 +192,6 @@ public class Tree extends H2OCountedCompleter {
   }
 
   public static abstract class INode {
-    abstract int classify(Row r);
     abstract int depth();       // Depth of deepest leaf
     abstract int leaves();      // Number of leaves
     abstract void computeStats(ArrayList<SplitInfo>[] stats);
@@ -206,29 +207,28 @@ public class Tree extends H2OCountedCompleter {
 
   /** Leaf node that for any row returns its the data class it belongs to. */
   static class LeafNode extends INode {
-    final int _class;    // A category reported by the inner node
-    final int _rows;     // A number of classified rows (only meaningful for training)
+    final byte[] _classHisto;    // A histogram of categories
+    final int   _rows;           // A number of classified rows (only meaningful for training)
     /**
      * Construct a new leaf node.
      * @param c - a particular value of class predictor from interval [0,N-1]
      * @param rows - numbers of rows with the predictor value
      */
-    LeafNode(int c, int rows) {
-      assert 0 <= c && c <= 254; // sanity check
-      _class = c;               // Class from 0 to _N-1
-      _rows  = rows;
+    LeafNode(byte[] ch, int rows) {
+      _classHisto = ch;               // Class from 0 to _N-1
+      _rows       = rows;
     }
     @Override public int depth()  { return 0; }
     @Override public int leaves() { return 1; }
     @Override public void computeStats(ArrayList<SplitInfo>[] stats) { /* do nothing for leaves */ }
-    @Override public int classify(Row r) { return _class; }
-    @Override public StringBuilder toString(StringBuilder sb, int n ) { return sb.append('[').append(_class).append(']').append('{').append(_rows).append('}'); }
+    @Override public StringBuilder toString(StringBuilder sb, int n ) { return sb.append('[').append(Arrays.toString(_classHisto)).append(']').append('{').append(_rows).append('}'); }
     @Override public void print(TreePrinter p) throws IOException { p.printNode(this); }
     @Override void write( AutoBuffer bs ) {
       bs.put1('[');             // Leaf indicator
-      bs.put1(_class);
+      for(int i=0; i<_classHisto.length;i++)
+        bs.put1(_classHisto[i]);
     }
-    @Override int size_impl( ) { return 2; } // 2 bytes in serialized form
+    @Override int size_impl( ) { return 1+_classHisto.length; } // 1+# of classes bytes in serialized form
   }
 
   /** Gini classifier node. */
@@ -267,7 +267,6 @@ public class Tree extends H2OCountedCompleter {
       }
     }
 
-    @Override int classify(Row r) { return r.getEncodedColumnValue(_column) <= _split ? _l.classify(r) : _r.classify(r);  }
     @Override public int depth() { return  _depth != 0 ? _depth : (_depth = Math.max(_l.depth(), _r.depth()) + 1); }
     @Override public int leaves() { return  _leaves != 0 ? _leaves : (_leaves=_l.leaves() + _r.leaves()); }
     @Override void computeStats(ArrayList<SplitInfo>[] stats) {
@@ -326,7 +325,6 @@ public class Tree extends H2OCountedCompleter {
 
     public ExclusionNode(int column, int val, String cname, float origSplit) { super(column,val,cname,origSplit);  }
 
-    @Override int classify(Row r) { return r.getEncodedColumnValue(_column) == _split ? _l.classify(r) : _r.classify(r); }
     @Override public void print(TreePrinter p) throws IOException { p.printNode(this); }
     @Override public String toString() { return "E "+_column +"==" + _split + " ("+_l+","+_r+")"; }
     @Override public StringBuilder toString( StringBuilder sb, int n ) {
@@ -356,16 +354,16 @@ public class Tree extends H2OCountedCompleter {
     public boolean isIn(Row row) { return row.getEncodedColumnValue(_column) == _split; }
   }
 
-  public int classify(Row r) { return _tree.classify(r); }
   public String toString()   { return _tree.toString(); }
   public int leaves() { return _tree.leaves(); }
   public int depth() { return _tree.depth(); }
 
-  // Write the Tree to a random Key homed here.
+  /** Write the Tree to a random Key homed here. */
   public Key toKey() {
     AutoBuffer bs = new AutoBuffer();
     bs.put4(_data_id);
     bs.put8(_seed);
+    bs.put2((char)_data.classes());
     _tree.write(bs);
     Key key = Key.make(UUID.randomUUID().toString(),(byte)1,Key.DFJ_INTERNAL_USER, H2O.SELF);
     DKV.put(key,new Value(key, bs.buf()));
@@ -378,6 +376,7 @@ public class Tree extends H2OCountedCompleter {
   public static short classify( AutoBuffer ts, ValueArray ary, AutoBuffer databits, int row, int modelDataMap[], short badData ) {
     ts.get4();    // Skip tree-id
     ts.get8();    // Skip seed
+    int classes = ts.get2();
     byte b;
 
     while( (b = (byte) ts.get1()) != '[' ) { // While not a leaf indicator
@@ -396,13 +395,25 @@ public class Tree extends H2OCountedCompleter {
         if( fdat > fcmp ) ts.position(ts.position() + skip);
       }
     }
-    return (short) ( ts.get1()&0xFF );      // Return the leaf's class
+    return findMajorityIdx(ts, classes); // Find a majority class in the leaf
+  }
+
+  private static short findMajorityIdx(AutoBuffer ts, int bytesLen) {
+    int  maxIdx = 0;
+    byte maxVal = -1;
+    for (int i=0; i<bytesLen;i++) {
+      byte val = (byte) ts.get1();
+      if (val>maxVal) { maxVal = val; maxIdx = i; }
+    }
+    return (short) maxIdx;
   }
 
   // Classify on the compressed tree bytes, from the pre-packed double data
   public static double classify( AutoBuffer ts, double[] ds, double badat ) {
     ts.get4();    // Skip tree-id
     ts.get8();    // Skip seed
+    int classes = ts.get2();
+
     byte b;
 
     while( (b = (byte) ts.get1()) != '[' ) { // While not a leaf indicator
@@ -421,7 +432,7 @@ public class Tree extends H2OCountedCompleter {
         if( fdat > fcmp ) ts.position(ts.position() + skip);
       }
     }
-    return ts.get1()&0xFF;      // Return the leaf's class
+    return findMajorityIdx(ts, classes); // Find a majority class in the leaf
   }
 
   public static int dataId( byte[] bits) { return UDP.get4(bits, 0); }
@@ -429,21 +440,28 @@ public class Tree extends H2OCountedCompleter {
 
   /** Abstract visitor class for serialized trees.*/
   public static abstract class TreeVisitor<T extends Exception> {
-    protected TreeVisitor<T> leaf( int tclass ) throws T { return this; }
+    protected TreeVisitor<T> leaf( byte[] tclass ) throws T { return this; }
     protected TreeVisitor<T>  pre( int col, float fcmp, int off0, int offl, int offr ) throws T { return this; }
     protected TreeVisitor<T>  mid( int col, float fcmp ) throws T { return this; }
     protected TreeVisitor<T> post( int col, float fcmp ) throws T { return this; }
     long  result( ) { return 0; }
     protected final AutoBuffer _ts;
+    protected final int        _classes;
+    protected final byte[]     _histo; // shared leaf histogram
     public TreeVisitor( AutoBuffer tbits ) {
       _ts = tbits;
       _ts.get4();               // Skip tree ID
       _ts.get8();               // Skip seed
+      _classes = _ts.get2();    // Skip number of classes
+      _histo   = new byte[_classes];
     }
 
     public final TreeVisitor<T> visit() throws T {
       byte b = (byte) _ts.get1();
-      if( b == '[' ) return leaf(_ts.get1()&0xFF);
+      if( b == '[' ) {
+        for(int i=0;i<_classes;i++) _histo[i] = (byte) _ts.get1();
+        return leaf(_histo);
+      }
       assert b == '(' || b == 'S' || b =='E' : b;
       int off0 = _ts.position()-1;    // Offset to start of *this* node
       int col = _ts.get2();     // Column number
@@ -460,10 +478,10 @@ public class Tree extends H2OCountedCompleter {
   public static long depth_leaves( AutoBuffer tbits ) {
     return new TreeVisitor<RuntimeException>(tbits) {
       int _maxdepth, _depth, _leaves;
-      protected TreeVisitor leaf(int tclass ) { _leaves++; if( _depth > _maxdepth ) _maxdepth = _depth; return this; }
-      protected TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) { _depth++; return this; }
-      protected TreeVisitor post(int col, float fcmp ) { _depth--; return this; }
-      long result( ) {return ((long)_maxdepth<<32) | _leaves; }
+      @Override protected TreeVisitor leaf(byte[] tclass ) { _leaves++; if( _depth > _maxdepth ) _maxdepth = _depth; return this; }
+      @Override protected TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) { _depth++; return this; }
+      @Override protected TreeVisitor post(int col, float fcmp ) { _depth--; return this; }
+      @Override long result( ) {return ((long)_maxdepth<<32) | _leaves; }
     }.visit().result();
   }
 }

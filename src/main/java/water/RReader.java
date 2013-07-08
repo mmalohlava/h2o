@@ -104,7 +104,7 @@ public class RReader {
         DKV.put(key, new Value(key, buffer.buf()));
       }
 
-      RFModel model = new RFModel(dest, headers, classes, keys, 1, 100.0f);
+      RFModel model = new RFModel(dest, headers, classes, keys, 1, 100.0f,-1);
       UKV.put(dest, model);
     } catch( Exception ex ) {
       Log.err(ex);

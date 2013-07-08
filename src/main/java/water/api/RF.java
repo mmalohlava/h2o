@@ -29,6 +29,7 @@ public class RF extends Request {
   protected final H2OKey            _modelKey   = new H2OKey(MODEL_KEY, RFModel.makeKey());
   /* Advanced settings */
   protected final Int               _binLimit   = new Int(BIN_LIMIT,1024, 0,65534);
+  protected final Int               _nodesize   = new Int(NODE_SIZE, 1, 1, Byte.MAX_VALUE);
   protected final LongInt           _seed       = new LongInt(SEED,0xae44a87f9edf1cbL,"High order bits make better seeds");
   protected final Bool              _parallel   = new Bool(PARALLEL,true,"Build trees in parallel");
   protected final Int               _exclusiveSplitLimit = new Int(EXCLUSIVE_SPLIT_LIMIT, null, 0, Integer.MAX_VALUE);
@@ -136,7 +137,8 @@ public class RF extends Request {
               strataSamples,
               0, /* verbose level is minimal here */
               exclusiveSplitLimit,
-              _useNonLocalData.value()
+              _useNonLocalData.value(),
+              _nodesize.value()
               );
       // Collect parameters required for validation.
       JsonObject response = new JsonObject();

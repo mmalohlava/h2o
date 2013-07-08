@@ -158,6 +158,20 @@ public class Data implements Iterable<Row> {
   }
 
   ColumnInfo[] _columnInfo;
+
+  public final byte[] histogram() {
+    byte[] histo = new byte[classes()];
+    Iterator<Row> it = iterator();
+    int total = 0;
+    while (it.hasNext()) {
+      Row r = it.next();
+      int c = unmapClass(r.classOf());
+      histo[c]++;
+      total++;
+    }
+    for (int i=0; i<histo.length; i++) histo[i] = total==0 ? 0 : (byte) (100*histo[i]/total);
+    return histo;
+  }
 }
 
 class Subset extends Data {

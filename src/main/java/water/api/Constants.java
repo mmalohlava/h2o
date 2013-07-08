@@ -107,6 +107,7 @@ public class Constants {
   public static final String NO_CM                 = "no_confusion_matrix";
   public static final String NODE                  = "node";
   public static final String NODE_NAME             = "node_name";
+  public static final String NODE_SIZE             = "node_size";
   public static final String NODES                 = "nodes";
   public static final String NORMALIZE             = "normalize";
   public static final String NUM_COLS              = "num_cols";

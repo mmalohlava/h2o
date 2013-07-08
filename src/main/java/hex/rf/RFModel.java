@@ -32,6 +32,8 @@ public class RFModel extends Model implements Cloneable, Progress {
   /** Number of computed split features per node - number of split features can differ for each node.
    * However, such difference would point to a problem with data distribution. */
   public int[] _nodesSplitFeatures;
+  /** Stop splitting when node has less then given number of records */
+  public int _nodesize;
   /** Number of keys the model expects to be built for it */
   public int _totalTrees;
   /** All the trees in the model */
@@ -48,7 +50,7 @@ public class RFModel extends Model implements Cloneable, Progress {
    * @param classes     the number of response classes
    * @param data        the dataset
    */
-  public RFModel(Key selfKey, int[] cols, Key dataKey, Key[] tkeys, int features, Sampling.Strategy samplingStrategy, float sample, float[] strataSamples, int splitFeatures, int totalTrees) {
+  public RFModel(Key selfKey, int[] cols, Key dataKey, Key[] tkeys, int features, Sampling.Strategy samplingStrategy, float sample, float[] strataSamples, int splitFeatures, int totalTrees, int nodesize) {
     super(selfKey, cols, dataKey);
     _features = features;
     _sample = sample;
@@ -59,11 +61,12 @@ public class RFModel extends Model implements Cloneable, Progress {
     _samplingStrategy = samplingStrategy;
     _nodesSplitFeatures = new int[H2O.CLOUD.size()];
     _localForests       = new Key[H2O.CLOUD.size()][];
+    _nodesize = nodesize;
     for(int i=0;i<H2O.CLOUD.size();i++) _localForests[i] = new Key[0];
     for( Key tkey : _tkeys ) assert DKV.get(tkey)!=null;
   }
 
-  public RFModel(Key selfKey, String [] colNames, String[] classNames, Key[] tkeys, int features, float sample) {
+  public RFModel(Key selfKey, String [] colNames, String[] classNames, Key[] tkeys, int features, float sample, int nodesize) {
     super(selfKey,colNames,classNames);
     _features       = features;
     _sample         = sample;
@@ -73,6 +76,7 @@ public class RFModel extends Model implements Cloneable, Progress {
     _samplingStrategy   = Sampling.Strategy.RANDOM;
     _nodesSplitFeatures = new int[H2O.CLOUD.size()];
     _localForests       = new Key[H2O.CLOUD.size()][];
+    _nodesize = nodesize;
     for(int i=0;i<H2O.CLOUD.size();i++) _localForests[i] = new Key[0];
     for( Key tkey : _tkeys ) assert DKV.get(tkey)!=null;
     assert classes() > 0;
