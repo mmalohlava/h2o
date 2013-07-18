@@ -23,10 +23,11 @@ public abstract class DRF {
    */
   public static final DRFJob execute(Key modelKey, int[] cols, ValueArray ary, int ntrees, int depth, int binLimit,
       StatType stat, long seed, boolean parallelTrees, double[] classWt, int numSplitFeatures,
-      Sampling.Strategy samplingStrategy, float sample, float[] strataSamples, int verbose, int exclusiveSplitLimit, boolean useNonLocalData, int nodesize) {
+      Sampling.Strategy samplingStrategy, float sample, float[] strataSamples, int verbose, int exclusiveSplitLimit,
+      boolean useNonLocalData, int nodesize, boolean refine) {
 
     // Create DRF remote task
-    final DRFTask drfTask = create(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, nodesize);
+    final DRFTask drfTask = create(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, nodesize, refine);
     // Create DRF user job & start it
     final DRFJob  drfJob  = new DRFJob(jobName(drfTask), modelKey);
     drfJob.start(drfTask);
@@ -43,7 +44,7 @@ public abstract class DRF {
     Key modelKey, int[] cols, ValueArray ary, int ntrees, int depth, int binLimit,
     StatType stat, long seed, boolean parallelTrees, double[] classWt, int numSplitFeatures,
     Sampling.Strategy samplingStrategy, float sample, float[] strataSamples,
-    int verbose, int exclusiveSplitLimit, boolean useNonLocalData, int nodesize) {
+    int verbose, int exclusiveSplitLimit, boolean useNonLocalData, int nodesize, boolean refine) {
 
     // Construct the RFModel to be trained
     DRFTask drf  = new DRFTask();
@@ -53,7 +54,7 @@ public abstract class DRF {
     // But it will need to be changed with new fluid vectors
     //assert ary._rpc == null : "DRF does not support different sizes of chunks for now!";
     int numrows = (int) (ValueArray.CHUNK_SZ/ary._rowsize);
-    drf._params = DRFParams.create(cols[cols.length-1], ntrees, depth, numrows, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, nodesize);
+    drf._params = DRFParams.create(cols[cols.length-1], ntrees, depth, numrows, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, nodesize, refine);
     // Verbose debug print
     if (verbose>0) dumpRFParams(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData);
     // Validate parameters
@@ -122,6 +123,9 @@ public abstract class DRF {
 
       // Build local random forest
       RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures);
+      // Refined random forest
+      if (_params._refine)
+        RandomForest.refine(_job, _params, localData, ntrees, numSplitFeatures);
       // Wait for the running jobs
       tryComplete();
     }
@@ -213,12 +217,14 @@ public abstract class DRF {
     long _seed;
     /** Minimal size of node to stop tree growing (stop splitting if we get down to this number of data points) */
     int _nodesize;
+    /** Use non-local data for tree refinement */
+    boolean _refine;
 
     public static final DRFParams create(int col, int ntrees, int depth, int numrows, int binLimit,
         StatType statType, long seed, boolean parallelTrees, double[] classWt,
         int numSplitFeatures, Sampling.Strategy samplingStrategy, float sample,
         float[] strataSamples, int verbose, int exclusiveSplitLimit,
-        boolean useNonLocalData, int nodesize) {
+        boolean useNonLocalData, int nodesize, boolean refine) {
 
       DRFParams drfp = new DRFParams();
       drfp._ntrees           = ntrees;
@@ -238,6 +244,7 @@ public abstract class DRF {
       drfp._numrows          = numrows;
       drfp._useNonLocalData  = useNonLocalData;
       drfp._nodesize         = nodesize;
+      drfp._refine           = refine;
       return drfp;
     }
   }

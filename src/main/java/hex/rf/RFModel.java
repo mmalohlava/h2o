@@ -40,6 +40,8 @@ public class RFModel extends Model implements Cloneable, Progress {
   public Key[]     _tkeys;
   /** Local forests produced by nodes */
   public Key[][]   _localForests;
+  /** Refine queues */
+  public Key[][]   _refineQueue;
   /** Total time in seconds to produce model */
   public long      _time;
 
@@ -61,8 +63,10 @@ public class RFModel extends Model implements Cloneable, Progress {
     _samplingStrategy = samplingStrategy;
     _nodesSplitFeatures = new int[H2O.CLOUD.size()];
     _localForests       = new Key[H2O.CLOUD.size()][];
+    _refineQueue        = new Key[H2O.CLOUD.size()][];
     _nodesize = nodesize;
     for(int i=0;i<H2O.CLOUD.size();i++) _localForests[i] = new Key[0];
+    for(int i=0;i<H2O.CLOUD.size();i++) _refineQueue[i] = new Key[0];
     for( Key tkey : _tkeys ) assert DKV.get(tkey)!=null;
   }
 
@@ -76,8 +80,10 @@ public class RFModel extends Model implements Cloneable, Progress {
     _samplingStrategy   = Sampling.Strategy.RANDOM;
     _nodesSplitFeatures = new int[H2O.CLOUD.size()];
     _localForests       = new Key[H2O.CLOUD.size()][];
+    _refineQueue        = new Key[H2O.CLOUD.size()][];
     _nodesize = nodesize;
     for(int i=0;i<H2O.CLOUD.size();i++) _localForests[i] = new Key[0];
+    for(int i=0;i<H2O.CLOUD.size();i++) _refineQueue[i] = new Key[0];
     for( Key tkey : _tkeys ) assert DKV.get(tkey)!=null;
     assert classes() > 0;
   }
@@ -93,13 +99,26 @@ public class RFModel extends Model implements Cloneable, Progress {
     }
   }
 
-  static public RFModel make(RFModel old, Key tkey) {
+  static public RFModel make(RFModel old, Key tkey, int nodeIdx, int refineNodeIdx) {
     RFModel m = old.clone();
     m._tkeys = Arrays.copyOf(old._tkeys,old._tkeys.length+1);
     m._tkeys[m._tkeys.length-1] = tkey;
-    int idx = H2O.SELF.index();
-    m._localForests[idx] = Arrays.copyOf(old._localForests[idx],old._localForests[idx].length+1);
-    m._localForests[idx][m._localForests[idx].length-1] = tkey;
+    // updating local forests
+    m._localForests[nodeIdx] = Arrays.copyOf(old._localForests[nodeIdx],old._localForests[nodeIdx].length+1);
+    m._localForests[nodeIdx][m._localForests[nodeIdx].length-1] = tkey;
+    // updating refine queue
+    m._refineQueue[refineNodeIdx] = Arrays.copyOf(m._refineQueue[refineNodeIdx], m._refineQueue[refineNodeIdx].length+1);
+    m._refineQueue[refineNodeIdx][m._refineQueue[refineNodeIdx].length-1] = tkey;
+
+    return m;
+  }
+
+  static public RFModel updateRQ(RFModel old, Key tKey, int refineNodeIdx) {
+    RFModel m = old.clone();
+    // updating refine queue
+    m._refineQueue[refineNodeIdx] = Arrays.copyOf(m._refineQueue[refineNodeIdx], m._refineQueue[refineNodeIdx].length+1);
+    m._refineQueue[refineNodeIdx][m._refineQueue[refineNodeIdx].length-1] = tKey;
+
     return m;
   }
 

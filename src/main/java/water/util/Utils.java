@@ -52,7 +52,7 @@ public class Utils {
   public static int max(int[] from) {
     return from[maxIndex(from)];
   }
-  public static int max(byte[] from) {
+  public static byte max(byte[] from) {
     return from[maxIndex(from)];
   }
 
@@ -320,5 +320,13 @@ public class Utils {
     ValueArray res = DKV.get(okey).get();
     return res;
   }
+
+  public static <T> boolean contains( final T[] array, final T v ) {
+    for ( final T e : array )
+        if ( e == v || v != null && v.equals( e ) )
+            return true;
+
+    return false;
+}
 
 }

@@ -35,6 +35,7 @@ public class RF extends Request {
   protected final Int               _exclusiveSplitLimit = new Int(EXCLUSIVE_SPLIT_LIMIT, null, 0, Integer.MAX_VALUE);
   protected final Bool              _iterativeCM         = new Bool(ITERATIVE_CM, true, "Compute confusion matrix on-the-fly");
   protected final Bool              _useNonLocalData     = new Bool(USE_NON_LOCAL_DATA, false, "Try to use also non-local data.");
+  protected final Bool              _refine              = new Bool(REFINE, false, "Try to rotate trees around the cloud and refine them based on non-local data.");
 
   /** Return the query link to this page */
   public static String link(Key k, String content) {
@@ -138,7 +139,8 @@ public class RF extends Request {
               0, /* verbose level is minimal here */
               exclusiveSplitLimit,
               _useNonLocalData.value(),
-              _nodesize.value()
+              _nodesize.value(),
+              _refine.value()
               );
       // Collect parameters required for validation.
       JsonObject response = new JsonObject();

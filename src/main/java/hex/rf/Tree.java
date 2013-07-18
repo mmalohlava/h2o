@@ -35,13 +35,14 @@ public class Tree extends H2OCountedCompleter {
   final int      _data_id;      // Data-subset identifier (so trees built on this subset are not validated on it)
   final int      _maxDepth;     // Tree-depth cutoff
   final int      _numSplitFeatures;  // Number of features to check at each splitting (~ split features)
-  INode          _tree;         // Root of decision tree
-  ThreadLocal<Statistic>[] _stats  = new ThreadLocal[2];
   final Job      _job;          // DRF job building this tree
   final long     _seed;         // Pseudo random seed: used to playback sampling
   final int      _nodesize;     // Minimal nodesize to decide about node to become a leaf (stop splitting if we get down to this number of records)
-  int            _exclusiveSplitLimit;
-  int            _verbose;
+  final int      _exclusiveSplitLimit;
+  final int      _verbose;
+  INode          _tree;         // Root of decision tree
+  ThreadLocal<Statistic>[] _stats  = new ThreadLocal[2];
+  Key            _thisTreeKey;
 
   /**
    * Constructor used to define the specs when building the tree from the top.
@@ -66,7 +67,7 @@ public class Tree extends H2OCountedCompleter {
     return true;
   }
 
-  private Statistic getStatistic(int index, Data data, long seed, int exclusiveSplitLimit) {
+  protected Statistic getStatistic(int index, Data data, long seed, int exclusiveSplitLimit) {
     Statistic result = _stats[index].get();
     if( result==null ) {
       result  = _type == StatType.GINI ?
@@ -105,6 +106,7 @@ public class Tree extends H2OCountedCompleter {
   // Actually build the tree
   @Override public void compute2() {
     if(!_job.cancelled()) {
+      System.err.println("Building tree " + _data_id);
       Timer timer    = new Timer();
       _stats[0]      = new ThreadLocal<Statistic>();
       _stats[1]      = new ThreadLocal<Statistic>();
@@ -122,7 +124,11 @@ public class Tree extends H2OCountedCompleter {
       _stats = null; // GC
 
       // Atomically improve the Model as well
-      appendKey(_job.dest(),toKey());
+      _thisTreeKey = appendKey(_job.dest(),toKey());
+      // -------
+//      System.err.println(dumpTree("Tree after build:\n"));
+      // -------
+
       StringBuilder sb = new StringBuilder("[RF] Tree : ").append(_data_id+1);
       sb.append(" d=").append(_tree.depth()).append(" leaves=").append(_tree.leaves()).append(" done in ").append(timer).append('\n');
       Log.debug(Sys.RANDF,_tree.toString(sb,  _verbose > 0 ? Integer.MAX_VALUE : 200).toString());
@@ -133,16 +139,21 @@ public class Tree extends H2OCountedCompleter {
 
   // Stupid static method to make a static anonymous inner class
   // which serializes "for free".
-  static void appendKey(Key model, final Key tKey) {
+  // Returns tree key.
+  static Key appendKey(Key model, final Key tKey) {
+    final int nodeIdx = H2O.SELF.index();
+    final int refineNodeIdx = (nodeIdx+1) % H2O.CLOUD.size();
     new TAtomic<RFModel>() {
       @Override public RFModel atomic(RFModel old) {
         if(old == null) return null;
-        return RFModel.make(old,tKey);
+        return RFModel.make(old,tKey,nodeIdx, refineNodeIdx);
       }
     }.invoke(model);
+
+    return tKey;
   }
 
-  private class FJBuild extends RecursiveTask<INode> {
+  protected class FJBuild extends RecursiveTask<INode> {
     final Statistic.Split _split;
     final Data _data;
     final int _depth;
@@ -164,7 +175,7 @@ public class Tree extends H2OCountedCompleter {
       _data.filter(nd,res,left,rite);
       FJBuild fj0 = null, fj1 = null;
       Statistic.Split ls = left.split(res[0], _depth >= _maxDepth || res[0].rows() <= _nodesize); // get the splits
-      Statistic.Split rs = rite.split(res[1], _depth >= _maxDepth || res[0].rows() <= _nodesize);
+      Statistic.Split rs = rite.split(res[1], _depth >= _maxDepth || res[1].rows() <= _nodesize);
       if (ls.isLeafNode() || ls.isImpossible())
             nd._l = new LeafNode(res[0].histogram(), res[0].rows()); // create leaf nodes if any
       else  fj0 = new FJBuild(ls,res[0],_depth+1, _seed + LTS_INIT);
@@ -293,7 +304,7 @@ public class Tree extends H2OCountedCompleter {
     @Override public void print(TreePrinter p) throws IOException { p.printNode(this); }
     @Override public String toString() { return "S "+_column +"<=" + _originalSplit + " ("+_l+","+_r+")";  }
     @Override public StringBuilder toString( StringBuilder sb, int n ) {
-      sb.append(_name).append("<=").append(Utils.p2d(split_value())).append('@').append(leaves()).append(" (");
+      sb.append(_name!=null?_name:_column).append("<=").append(Utils.p2d(split_value())).append('@').append(leaves()).append(" (");
       if( sb.length() > n ) return sb;
       sb = _l.toString(sb,n).append(',');
       if( sb.length() > n ) return sb;
@@ -358,13 +369,18 @@ public class Tree extends H2OCountedCompleter {
   public int leaves() { return _tree.leaves(); }
   public int depth() { return _tree.depth(); }
 
-  /** Write the Tree to a random Key homed here. */
-  public Key toKey() {
+
+  protected final AutoBuffer serialize() {
     AutoBuffer bs = new AutoBuffer();
     bs.put4(_data_id);
     bs.put8(_seed);
     bs.put2((char)_data.classes());
     _tree.write(bs);
+    return bs;
+  }
+  /** Write the Tree to a random Key homed here. */
+  public Key toKey() {
+    AutoBuffer bs = serialize();
     Key key = Key.make(UUID.randomUUID().toString(),(byte)1,Key.DFJ_INTERNAL_USER, H2O.SELF);
     DKV.put(key,new Value(key, bs.buf()));
     return key;
@@ -433,6 +449,12 @@ public class Tree extends H2OCountedCompleter {
       }
     }
     return findMajorityIdx(ts, classes); // Find a majority class in the leaf
+  }
+
+  protected String dumpTree(String prefix) {
+    StringBuilder sb = new StringBuilder(prefix);
+    _tree.toString(sb, Integer.MAX_VALUE);
+    return sb.toString();
   }
 
   public static int dataId( byte[] bits) { return UDP.get4(bits, 0); }

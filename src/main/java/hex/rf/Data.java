@@ -3,7 +3,8 @@ package hex.rf;
 import hex.rf.Data.Row;
 import hex.rf.Tree.SplitNode;
 
-import java.util.*;
+import java.util.Iterator;
+import java.util.Random;
 
 import water.MemoryManager;
 import water.util.Utils;
@@ -25,6 +26,7 @@ public class Data implements Iterable<Row> {
     }
     public int classOf()    { return _dapt.classOf(_index); }
     public final short getEncodedColumnValue(int colIndex) { return _dapt.getEncodedColumnValue(_index, colIndex); }
+    public final float getRawValue(int colIndex) { return _dapt.unmap(colIndex, getEncodedColumnValue(colIndex)); }
     public final boolean hasValidValue(int colIndex) { return !_dapt.hasBadValue(_index, colIndex); }
     public final boolean isValid() { return !_dapt.isBadRow(_index); }
   }
@@ -70,6 +72,7 @@ public class Data implements Iterable<Row> {
   }
 
   public void filter(SplitNode node, Data[] result, Statistic ls, Statistic rs) {
+    assert (ls != null && rs != null) || (ls == null && rs == null);
     final Row row = new Row();
     int[] permutation = getPermutationArray();
     int l = start(), r = end() - 1;
@@ -78,23 +81,25 @@ public class Data implements Iterable<Row> {
       int permIdx = row._index = permutation[l];
       boolean putToLeft = true;
       if (node.canDecideAbout(row)) { // are we splitting over existing value
-        putToLeft = node.isIn(row);
+        putToLeft = node._split != Integer.MIN_VALUE ? node.isIn(row) : row.getRawValue(node._column) < node._originalSplit ;
       } else { // make a random choice about non
         putToLeft = _rng.nextBoolean();
       }
 
       if (putToLeft) {
-        ls.addQ(row);
+        if (ls!=null) ls.addQ(row);
         ++l;
       } else {
-        rs.addQ(row);
+        if (rs!=null) rs.addQ(row);
         permutation[l] = permutation[r];
         permutation[r--] = permIdx;
       }
     }
     assert r+1 == l;
-    ls.applyClassWeights();     // Weight the distributions
-    rs.applyClassWeights();     // Weight the distributions
+    if (ls!=null && rs!=null) {
+      ls.applyClassWeights();     // Weight the distributions
+      rs.applyClassWeights();     // Weight the distributions
+    }
     ColumnInfo[] linfo = _columnInfo.clone();
     ColumnInfo[] rinfo = _columnInfo.clone();
     linfo[node._column]= linfo[node._column].left(node._split);
@@ -103,6 +108,10 @@ public class Data implements Iterable<Row> {
     result[1]= new Subset(this, permutation, l,   end());
     result[0]._columnInfo = linfo;
     result[1]._columnInfo = rinfo;
+  }
+
+  public void split(SplitNode sn, Data[] lrData) {
+    filter(sn, lrData, null, null);
   }
 
   public Data sampleWithReplacement(double bagSizePct, short[] complement) {

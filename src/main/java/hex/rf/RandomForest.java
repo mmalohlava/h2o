@@ -1,6 +1,5 @@
 package hex.rf;
 
-import hex.rf.ConfusionTask.CM;
 import hex.rf.ConfusionTask.CMFinal;
 import hex.rf.DRF.DRFJob;
 import hex.rf.DRF.DRFParams;
@@ -11,7 +10,6 @@ import java.io.File;
 import java.util.*;
 
 import jsr166y.ForkJoinTask;
-
 import water.*;
 import water.Timer;
 import water.util.*;
@@ -30,7 +28,7 @@ public class RandomForest {
   private static final long TREE_SEED_INIT = 0x1321e74a0192470cL;
 
   /** Build random forest for data stored on this node. */
-  public static void build(
+  public static Tree[] build(
                       final Job job,
                       final DRFParams drfParams,
                       final Data data,
@@ -50,9 +48,40 @@ public class RandomForest {
                           i, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize);
       if (!drfParams._parallel)   ForkJoinTask.invokeAll(new Tree[]{trees[i]});
     }
-
-    if(drfParams._parallel) DRemoteTask.invokeAll(trees);
+    // Invoking in parallel at this node
+    if(drfParams._parallel) ForkJoinTask.invokeAll(trees);
     Log.debug(Sys.RANDF,"All trees ("+ntrees+") done in "+ t_alltrees);
+
+    return trees;
+  }
+
+  public static void refine(final Job job, final DRFParams drfParams, final Data data, int ntrees, int numSplitFeatures) {
+    int idx = 0;
+    int nodeIdx = H2O.SELF.index();
+    Sampling sampler = createSampler(drfParams);
+
+    while (idx < drfParams._ntrees) {
+      RFModel m = UKV.get(job.dest());
+      Key[] refineQueue = m._refineQueue[nodeIdx];
+      if (idx < refineQueue.length) { // is there a new item
+        LinkedList<RefinedTree> trees = new LinkedList<RefinedTree>();
+        while(idx<refineQueue.length) {
+          Key tKey = refineQueue[idx];
+          if (!Utils.contains(m._localForests[nodeIdx], tKey)) { // it is not local tree
+            byte[] serialTree = DKV.get(tKey).memOrLoad();
+            long seed = Tree.seed(serialTree);
+            int treeId = Tree.dataId(serialTree);
+            trees.add(new RefinedTree(job, tKey, new AutoBuffer(serialTree), treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+          }
+          idx++;
+        }
+        // compute
+        ForkJoinTask.invokeAll(trees);
+        System.err.println("KONEC");
+      } else {
+        try { Thread.sleep(1000); } catch (InterruptedException _) {};
+      }
+    }
   }
 
   static Sampling createSampler(final DRFParams params) {
@@ -196,7 +225,8 @@ public class RandomForest {
                           ARGS.verbose,
                           ARGS.exclusive,
                           false,
-                          ARGS.nodesize);
+                          ARGS.nodesize,
+                          false);
     RFModel model = drfJob.get();  // block on all nodes!
     Log.debug(Sys.RANDF,"Random forest finished in TODO"/*+ drf._t_main*/);
 

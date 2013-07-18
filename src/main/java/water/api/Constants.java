@@ -129,6 +129,7 @@ public class Constants {
   public static final String PROGRESS_TOTAL        = "progress_total";
   public static final String REDIRECT              = "redirect_request";
   public static final String REDIRECT_ARGS         = "redirect_request_args";
+  public static final String REFINE                = "refine";
   public static final String REPLICATION_FACTOR    = "replication_factor";
   public static final String REQUEST_TIME          = "time";
   public static final String RESPONSE              = "response";
