@@ -260,4 +260,11 @@ public class Job extends Iced {
       cancel();
     }
   }
+
+  public static boolean isDone(String value) {
+    Key kJob = Key.make(value);
+    Job j = findJob(kJob);
+    if (j==null || j._endTime != 0) return true;
+    else return false;
+  }
 }

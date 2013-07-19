@@ -156,7 +156,8 @@ def trainRF(trainParseKey, **kwargs):
 def scoreRF(scoreParseKey, trainResult, **kwargs):
     # Run validation on dataset
     rfModelKey  = trainResult['model_key']
-    ntree       = trainResult['ntree']
+    #ntree       = trainResult['ntree']
+    ntree = None
     
     start = time.time()
     data_key = scoreParseKey['destination_key']

@@ -177,6 +177,8 @@ def runRFOnly(node=None, parseKey=None, trees=5,
 
     # this is important. it's the only accurate value for how many trees RF was asked for.
     ntree    = rf['ntree']
+    job = rf['response']['redirect_request_args']['job']
+    print "THe job is: ", job
 
     # /ip:port of cloud (can't use h2o name)
     rfClass= rf['response_variable']
@@ -184,7 +186,7 @@ def runRFOnly(node=None, parseKey=None, trees=5,
     rfViewResult = None
     if rfview:
         rfViewResult = runRFView(node, data_key, model_key, ntree, 
-            timeoutSecs, retryDelaySecs, noise=noise, noPrint=noPrint, **kwargs)
+            timeoutSecs, retryDelaySecs, noise=noise, noPrint=noPrint, job=job, **kwargs)
     
     return rfViewResult
 
@@ -195,18 +197,16 @@ def runRFTreeView(node=None, n=None, data_key=None, model_key=None, timeoutSecs=
 
 def runRFView(node=None, data_key=None, model_key=None, ntree=None, 
     timeoutSecs=15, retryDelaySecs=2, 
-    noise=None, noPoll=False, noPrint=False, **kwargs):
+    noise=None, noPoll=False, noPrint=False, job=None, **kwargs):
     if not node: node = h2o.nodes[0]
 
     def test(n, tries=None):
-        rfView = n.random_forest_view(data_key, model_key, timeoutSecs, noise=noise, **kwargs)
+        rfView = n.random_forest_view(data_key, model_key, timeoutSecs,
+                noise=noise, job=job, **kwargs)
         status = rfView['response']['status']
         numberBuilt = rfView['trees']['number_built']
-
+        
         if status == 'done': 
-            if numberBuilt!=ntree: 
-                raise Exception("RFview done but number_built!=ntree: %s %s", 
-                    numberBuilt, ntree)
             return True
         if status != 'poll': raise Exception('Unexpected status: ' + status)
 
@@ -216,9 +216,8 @@ def runRFView(node=None, data_key=None, model_key=None, ntree=None,
         # want to double check all this because it's new
         # and we had problems with races/doneness before
         errorInResponse = \
-            numberBuilt<0 or ntree<0 or numberBuilt>ntree or \
-            progress<0 or progressTotal<0 or progress>progressTotal or \
-            ntree!=rfView['ntree']
+            numberBuilt<0 or ntree<0 or \
+            progress<0 or progressTotal<0 or progress>progressTotal
             ## progressTotal!=ntree or
             # rfView better always agree with what RF ntree was
 
@@ -243,7 +242,7 @@ def runRFView(node=None, data_key=None, model_key=None, ntree=None,
 
     node.stabilize(
             test,
-            'random forest reporting %d trees' % ntree,
+            'random forest reporting...',
             timeoutSecs=timeoutSecs, retryDelaySecs=retryDelaySecs)
 
     # kind of wasteful re-read, but maybe good for testing

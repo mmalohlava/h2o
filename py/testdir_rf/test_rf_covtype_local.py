@@ -4,11 +4,17 @@ sys.path.extend(['.','..','py'])
 import h2o, h2o_cmd, h2o_hosts, h2o_rf
 
 # RF train parameters
+
+bench_params = {
+        'nodes_count'  : 5,
+        'java_heap_GB' : 2
+        }
+
 paramsTrainRF = { 
-            'ntree'      : 1, 
+            'ntree'      : 50, 
             #'depth'      : 300,
             'parallel'   : 1, 
-            'bin_limit'  : 20000,
+            'bin_limit'  : 1024,
             'stat_type'  : 'ENTROPY',
             'out_of_bag_error_estimate': 1, 
             'exclusive_split_limit'    : 0,
@@ -44,7 +50,8 @@ class Basic(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        h2o.build_cloud(node_count=2)
+        h2o.build_cloud(node_count=bench_params['nodes_count'],
+                java_heap_GB=bench_params['java_heap_GB'])
         
     @classmethod
     def tearDownClass(cls):
@@ -62,18 +69,22 @@ class Basic(unittest.TestCase):
 
     def test_RF(self):
         trainKey = self.loadTrainData()
+        scoreKey = self.loadScoreData()
         kwargs   = paramsTrainRF.copy()
-        trainResult = h2o_rf.trainRF(trainKey, model_key="rf1", **kwargs)
+        trainResultNormal = h2o_rf.trainRF(trainKey, model_key="rfm_normal", **kwargs)
+        kwargs   = paramsScoreRF.copy()
+        scoreResultNormal = h2o_rf.scoreRF(scoreKey, trainResultNormal, **kwargs)
+        print "\nScoring\n========={0}".format(h2o_rf.pp_rf_result(scoreResultNormal))
+        
+        kwargs   = paramsTrainRF.copy()
+        trainResultRefined = h2o_rf.trainRF(trainKey, refine=1, model_key="rfm_refined", **kwargs)
+        kwargs   = paramsScoreRF.copy()
+        scoreResultRefined = h2o_rf.scoreRF(scoreKey, trainResultRefined, **kwargs)
+        print scoreResultRefined
+        print "\nScoring\n========={0}".format(h2o_rf.pp_rf_result(scoreResultRefined))
 
-        #scoreKey = self.loadScoreData()
-        #kwargs   = paramsScoreRF.copy()
-        #scoreResult = h2o_rf.scoreRF(scoreKey, trainResult, **kwargs)
-
-        print "\nTrain\n=========={0}".format(h2o_rf.pp_rf_result(trainResult))
-        trainResult = h2o_rf.trainRF(trainKey, model_key="rf2", **kwargs)
-        print "\nTrain\n=========={0}".format(h2o_rf.pp_rf_result(trainResult))
-        #print "\nScoring\n========={0}".format(h2o_rf.pp_rf_result(scoreResult))
         time.sleep(3600)
 
 if __name__ == '__main__':
     h2o.unit_main()
+

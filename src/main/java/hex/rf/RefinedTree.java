@@ -86,7 +86,7 @@ public class RefinedTree extends Tree {
         int oldPred = Utils.maxIndex(((LeafNode)tree)._classHisto);
         byte[] histo = d.histogram();
         int newPred = Utils.maxIndex(histo);
-        if (oldPred!=newPred) Log.warn("Leaf refinement stop at leaf but predict different class! " + oldPred+"!="+newPred);
+//        if (oldPred!=newPred) Log.warn("Leaf refinement stop at leaf but predict different class! " + oldPred+"!="+newPred);
       }
     } else { // It is a split node
       SplitNode sn = (SplitNode) tree;

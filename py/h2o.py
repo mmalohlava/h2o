@@ -1138,6 +1138,7 @@ class H2O(object):
             'model_key': model_key,
             'out_of_bag_error_estimate': 1, 
             'class_weights': None,
+            'job': None,
             }
         browseAlso = kwargs.pop('browseAlso',False)
 

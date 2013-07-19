@@ -68,7 +68,7 @@ public class RandomForest {
         if (i == nodeIdx) continue; // do not refine self
         Key[] targetNodeForest = m._localForests[i];
         for (int j=0; j<targetNodeForest.length; j++) {
-          if (j<refinedForests[i].length || refinedForests[i][j]==null) {
+          if (j>=refinedForests[i].length || refinedForests[i][j]==null) {
             Key tKey = targetNodeForest[j];
             byte[] serialTree = DKV.get(tKey).memOrLoad();
             long seed = Tree.seed(serialTree);
@@ -84,6 +84,31 @@ public class RandomForest {
         try { Thread.sleep(500); } catch (InterruptedException _) {};
       }
     }
+    System.err.println("Refinement done on: " + nodeIdx);
+    RFModel m = UKV.get(job.dest());
+    final Key[][] refinedForests = m._refinedForests[nodeIdx];
+    final int numOfTrees = idx;
+    final Key[] allRefinedTrees = new Key[numOfTrees];
+    idx = 0;
+    for(int i=0; i< refinedForests.length;i++) {
+      System.err.println("Node " + i);
+      for (int j=0; j<refinedForests[i].length; j++) {
+        System.err.println(" > Tree: " + refinedForests[i][j]);
+        allRefinedTrees[idx++] = refinedForests[i][j];
+      }
+    }
+
+    new TAtomic<RFModel>() {
+      @Override public RFModel atomic(RFModel old) {
+        RFModel newm = old.clone();
+        int len = newm._tkeys.length;
+        newm._tkeys = Arrays.copyOf(newm._tkeys, len + allRefinedTrees.length);
+        for (int i=0; i<allRefinedTrees.length;i++) newm._tkeys[len + i] = allRefinedTrees[i];
+        newm._totalTrees += allRefinedTrees.length;
+
+        return newm;
+      }
+    }.invoke(job.dest());
   }
 
   static Sampling createSampler(final DRFParams params) {

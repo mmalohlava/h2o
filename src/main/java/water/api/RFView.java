@@ -19,6 +19,7 @@ public class RFView extends /* Progress */ Request {
   /** The number specifies confusion matrix refresh threshold (in percent of trees). */
   public static final int DEFAULT_CM_REFRESH_TRESHOLD   = 25; // = 25% - means the CM will be generated each 25% of trees has been built
 
+  final Str _job  = new Str(JOB, "NONE");
   protected final H2OHexKey          _dataKey  = new H2OHexKey(DATA_KEY);
   protected final RFModelKey         _modelKey = new RFModelKey(MODEL_KEY);
   protected final HexKeyClassCol     _classCol = new HexKeyClassCol(CLASS, _dataKey);
@@ -182,6 +183,12 @@ public class RFView extends /* Progress */ Request {
       trees.add(Constants.TREE_LEAVES, model.leaves().toJson());
     }
     response.add(Constants.TREES,trees);
+
+    if (!_job.value().equals("NONE")) {
+      System.err.println("BEFORE Checking if job " + _job.value() + " is done: " + done);
+      done &= Job.isDone(_job.value());
+      System.err.println("AFTER Checking if job " + _job.value() + " is done: " + done);
+    }
 
     // Build a response
     Response r;
