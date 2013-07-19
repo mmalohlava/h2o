@@ -60,26 +60,28 @@ public class RandomForest {
     int nodeIdx = H2O.SELF.index();
     Sampling sampler = createSampler(drfParams);
 
-    while (idx < drfParams._ntrees) {
+    while (idx < drfParams._ntrees-ntrees) {
       RFModel m = UKV.get(job.dest());
-      Key[] refineQueue = m._refineQueue[nodeIdx];
-      if (idx < refineQueue.length) { // is there a new item
-        LinkedList<RefinedTree> trees = new LinkedList<RefinedTree>();
-        while(idx<refineQueue.length) {
-          Key tKey = refineQueue[idx];
-          if (!Utils.contains(m._localForests[nodeIdx], tKey)) { // it is not local tree
+      Key[][] refinedForests = m._refinedForests[nodeIdx]; // this is a forest of trees which this node refined
+      LinkedList<RefinedTree> trees = new LinkedList<RefinedTree>();
+      for (int i=0; i<refinedForests.length; i++) { // do loop over all nodes in cluster
+        if (i == nodeIdx) continue; // do not refine self
+        Key[] targetNodeForest = m._localForests[i];
+        for (int j=0; j<targetNodeForest.length; j++) {
+          if (j<refinedForests[i].length || refinedForests[i][j]==null) {
+            Key tKey = targetNodeForest[j];
             byte[] serialTree = DKV.get(tKey).memOrLoad();
             long seed = Tree.seed(serialTree);
             int treeId = Tree.dataId(serialTree);
-            trees.add(new RefinedTree(job, tKey, new AutoBuffer(serialTree), treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+            trees.add(new RefinedTree(job, tKey, new AutoBuffer(serialTree), i, j, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+            idx++;
           }
-          idx++;
         }
-        // compute
-        ForkJoinTask.invokeAll(trees);
-        System.err.println("KONEC");
-      } else {
-        try { Thread.sleep(1000); } catch (InterruptedException _) {};
+      }
+      if (!trees.isEmpty()) {
+        ForkJoinTask.invokeAll(trees); // refine tree
+      } else { // or wait little bit for rest of nodes
+        try { Thread.sleep(500); } catch (InterruptedException _) {};
       }
     }
   }

@@ -1,26 +1,30 @@
 package hex.rf;
 
+import hex.rf.Data.Row;
+import hex.rf.Statistic.Split;
+
 import java.util.Arrays;
 import java.util.Stack;
 
-import hex.rf.Data.Row;
-import hex.rf.Statistic.Split;
 import water.*;
 import water.util.Log;
 import water.util.Utils;
-import water.util.Log.Tag.Sys;
 
 
 public class RefinedTree extends Tree {
 
-  final Key _origKey;
+  final Key _origTreeKey;
   final AutoBuffer _serialTree;
+  final int _treeProducerIdx;
+  final int _treeIdx; // tree idx in producer forest
 
-  public RefinedTree(Job job, Key key, AutoBuffer serialTree, int treeId, long seed, Data data, int maxDepth, StatType stat, int numSplitFeatures,
+  public RefinedTree(Job job, Key orgiTreeKey, AutoBuffer serialTree, int treeProducerIdx, int treeIdx, int treeId, long seed, Data data, int maxDepth, StatType stat, int numSplitFeatures,
       int exclusiveSplitLimit, Sampling sampler, int verbose, int nodesize) {
     super(job, data, maxDepth, stat, numSplitFeatures, seed, treeId, exclusiveSplitLimit, sampler, verbose, nodesize);
-    _origKey = key;
+    _origTreeKey = orgiTreeKey; // tree of key being refined
     _serialTree = serialTree;
+    _treeProducerIdx = treeProducerIdx;
+    _treeIdx = treeIdx;
   }
 
   @Override public void compute2() {
@@ -30,6 +34,7 @@ public class RefinedTree extends Tree {
       _stats[0]   = new ThreadLocal<Statistic>();
       _stats[1]   = new ThreadLocal<Statistic>();
       Data      d = _sampler.sample(_data, _seed);
+      // Recostructing tree in memory
       _tree = extractTree(_serialTree);
       // -------
 //      System.err.println(dumpTree("Tree after load:\n"));
@@ -41,8 +46,7 @@ public class RefinedTree extends Tree {
 //      System.err.println(dumpTree("Tree after refine:\n"));
       // -------
 
-      updateKey(_origKey,serialize());
-      updateRefinedQueue(_job.dest(), _origKey);
+      updateRefinedTreeMatrix(_job.dest(), toKey(), _treeIdx, _treeProducerIdx);
     }
     tryComplete();
   }
@@ -55,13 +59,12 @@ public class RefinedTree extends Tree {
       }
     }.invoke(tKey);
   }
-  static void updateRefinedQueue(final Key rfModel, final Key tKey) {
-    int nodeIdx = H2O.SELF.index();
-    final int nextNodeIdx = (nodeIdx+1) % H2O.CLOUD.size();
+  static void updateRefinedTreeMatrix(final Key rfModel, final Key tKey, final int treeIdx, final int treeProducerIdx) {
+    final int nodeIdx = H2O.SELF.index();
     new TAtomic<RFModel>() {
       @Override public RFModel atomic(RFModel old) {
         if (old==null) return null;
-        return RFModel.updateRQ(old, tKey, nextNodeIdx);
+        return RFModel.updateRTM(old, tKey, treeIdx, treeProducerIdx, nodeIdx);
       }
     }.invoke(rfModel);
   }
@@ -81,16 +84,17 @@ public class RefinedTree extends Tree {
       } else {
         // do nothing  but just check if we obtain the same split class
         int oldPred = Utils.maxIndex(((LeafNode)tree)._classHisto);
-        int newPred = Utils.maxIndex(d.histogram());
-//        if (oldPred!=newPred) Log.warn("Leaf refinement stop at leaf but predict different class! " + oldPred+"!="+newPred);
+        byte[] histo = d.histogram();
+        int newPred = Utils.maxIndex(histo);
+        if (oldPred!=newPred) Log.warn("Leaf refinement stop at leaf but predict different class! " + oldPred+"!="+newPred);
       }
     } else { // It is a split node
       SplitNode sn = (SplitNode) tree;
       // split data into L/R parts and recall split on the L/R nodes
       Data[] lrData = new Data[2];
       d.split(sn, lrData);
-      refine(lrData[0], sn, sn._l, depth+1);
-      refine(lrData[1], sn, sn._r, depth+1);
+      if (lrData[0].rows() > 0) refine(lrData[0], sn, sn._l, depth+1);
+      if (lrData[1].rows() > 0) refine(lrData[1], sn, sn._r, depth+1);
     }
   }
   static INode extractTree(AutoBuffer sTree) {

@@ -142,11 +142,10 @@ public class Tree extends H2OCountedCompleter {
   // Returns tree key.
   static Key appendKey(Key model, final Key tKey) {
     final int nodeIdx = H2O.SELF.index();
-    final int refineNodeIdx = (nodeIdx+1) % H2O.CLOUD.size();
     new TAtomic<RFModel>() {
       @Override public RFModel atomic(RFModel old) {
         if(old == null) return null;
-        return RFModel.make(old,tKey,nodeIdx, refineNodeIdx);
+        return RFModel.make(old,tKey,nodeIdx);
       }
     }.invoke(model);
 
