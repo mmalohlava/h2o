@@ -2,6 +2,7 @@ package hex.rf;
 
 import hex.rf.Data.Row;
 import hex.rf.Statistic.Split;
+import hex.rf.Tree.LeafNode;
 
 import java.util.Arrays;
 import java.util.Stack;
@@ -77,17 +78,19 @@ public class RefinedTree extends Tree {
       for (Row r : d) stats.addQ(r);
       stats.applyClassWeights();
       Split split = stats.split(d, false);
+      INode newNode = null;
       if (! split.isLeafNode()) {
-        INode node = new FJBuild(split, d, depth, _seed).compute();
+        newNode = new FJBuild(split, d, depth, _seed).compute();
 //        Log.info("Leaf node refined!");
-        if (isLeft) parent._l = node; else parent._r = node;
       } else {
         // do nothing  but just check if we obtain the same split class
-        int oldPred = Utils.maxIndex(((LeafNode)tree)._classHisto);
         byte[] histo = d.histogram();
+        /*int oldPred = Utils.maxIndex(((LeafNode)tree)._classHisto);
         int newPred = Utils.maxIndex(histo);
-//        if (oldPred!=newPred) Log.warn("Leaf refinement stop at leaf but predict different class! " + oldPred+"!="+newPred);
+        if (oldPred!=newPred) Log.warn("Leaf refinement stop at leaf but predict different class! " + oldPred+"!="+newPred);*/
+        newNode = new LeafNode(histo, d.rows()); // OR use = tree
       }
+      if (isLeft) parent._l = newNode; else parent._r = newNode;
     } else { // It is a split node
       SplitNode sn = (SplitNode) tree;
       // split data into L/R parts and recall split on the L/R nodes

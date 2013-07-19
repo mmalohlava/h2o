@@ -6,7 +6,7 @@ import h2o, h2o_cmd, h2o_hosts, h2o_rf
 # RF train parameters
 
 bench_params = {
-        'nodes_count'  : 5,
+        'nodes_count'  : 3,
         'java_heap_GB' : 2
         }
 
@@ -74,16 +74,13 @@ class Basic(unittest.TestCase):
         trainResultNormal = h2o_rf.trainRF(trainKey, model_key="rfm_normal", **kwargs)
         kwargs   = paramsScoreRF.copy()
         scoreResultNormal = h2o_rf.scoreRF(scoreKey, trainResultNormal, **kwargs)
-        print "\nScoring\n========={0}".format(h2o_rf.pp_rf_result(scoreResultNormal))
         
         kwargs   = paramsTrainRF.copy()
         trainResultRefined = h2o_rf.trainRF(trainKey, refine=1, model_key="rfm_refined", **kwargs)
         kwargs   = paramsScoreRF.copy()
         scoreResultRefined = h2o_rf.scoreRF(scoreKey, trainResultRefined, **kwargs)
-        print scoreResultRefined
-        print "\nScoring\n========={0}".format(h2o_rf.pp_rf_result(scoreResultRefined))
-
-        time.sleep(3600)
+        print "\nScoring normal forest\n========={0}".format(h2o_rf.pp_rf_result(scoreResultNormal))
+        print "\nScoring refined forest\n========={0}".format(h2o_rf.pp_rf_result(scoreResultRefined))
 
 if __name__ == '__main__':
     h2o.unit_main()
