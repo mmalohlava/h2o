@@ -198,9 +198,10 @@ def pp_rf_result(rf):
    Type: {7}
     Err: {8} %
    Time: {9} seconds
+  Trees: {10}
 
    Confusion matrix:
-{10}
+{11}
 """.format(
         rf['trees']['leaves']['min'],
         rf['trees']['leaves']['mean'],
@@ -212,5 +213,6 @@ def pp_rf_result(rf):
         rf['confusion_matrix']['type'],
         rf['confusion_matrix']['classification_error'] *100,
         rf['response']['time'],
+        rf['confusion_matrix']['used_trees'],
         cm)
 
