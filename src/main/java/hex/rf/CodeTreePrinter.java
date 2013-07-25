@@ -78,7 +78,7 @@ public class CodeTreePrinter extends TreePrinter {
       _dest.append("int classify(float fs[]) {\n");
       _dest.incrementIndent();
       new Tree.TreeVisitor<IOException>(tbits) {
-        @Override public Tree.TreeVisitor leaf(byte[] classHisto ) throws IOException {
+        @Override public Tree.TreeVisitor leaf(int aRows, byte[] classHisto ) throws IOException {
         int tclass = Utils.maxIndex(classHisto);
         String x = _classNames != null && tclass < _classNames.length
             ? String.format("return %s;\n",_classNames[tclass])

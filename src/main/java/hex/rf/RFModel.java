@@ -102,13 +102,15 @@ public class RFModel extends Model implements Cloneable, Progress {
     }
   }
 
-  static public RFModel make(RFModel old, Key tkey, int nodeIdx) {
+  static public RFModel make(RFModel old, Key tkey, int localTreeId, int nodeIdx) {
     RFModel m = old.clone();
     m._tkeys = Arrays.copyOf(old._tkeys,old._tkeys.length+1);
     m._tkeys[m._tkeys.length-1] = tkey;
     // updating local forests
-    m._localForests[nodeIdx] = Arrays.copyOf(old._localForests[nodeIdx],old._localForests[nodeIdx].length+1);
-    m._localForests[nodeIdx][m._localForests[nodeIdx].length-1] = tkey;
+    if (localTreeId>=0) {
+      m._localForests[nodeIdx] = Arrays.copyOf(old._localForests[nodeIdx],Math.max(old._localForests[nodeIdx].length, localTreeId+1));
+      m._localForests[nodeIdx][localTreeId] = tkey;
+    }
 
     return m;
   }
@@ -174,6 +176,9 @@ public class RFModel extends Model implements Cloneable, Progress {
    */
   public short classify0(int tree_id, ValueArray data, AutoBuffer chunk, int row, int modelDataMap[], short badrow) {
     return Tree.classify(new AutoBuffer(tree(tree_id)), data, chunk, row, modelDataMap, badrow);
+  }
+  public byte[] classify0(int tree_id, ValueArray data, AutoBuffer chunk, int row, int modelDataMap[], byte[] result) {
+    return Tree.classify(new AutoBuffer(tree(tree_id)), data, chunk, row, modelDataMap, result);
   }
 
   private void vote(ValueArray data, AutoBuffer chunk, int row, int modelDataMap[], int[] votes) {

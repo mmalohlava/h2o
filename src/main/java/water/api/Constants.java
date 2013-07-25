@@ -107,7 +107,7 @@ public class Constants {
   public static final String NO_CM                 = "no_confusion_matrix";
   public static final String NODE                  = "node";
   public static final String NODE_NAME             = "node_name";
-  public static final String NODE_SIZE             = "node_size";
+  public static final String NODESIZE              = "nodesize";
   public static final String NODES                 = "nodes";
   public static final String NORMALIZE             = "normalize";
   public static final String NUM_COLS              = "num_cols";
@@ -130,6 +130,7 @@ public class Constants {
   public static final String REDIRECT              = "redirect_request";
   public static final String REDIRECT_ARGS         = "redirect_request_args";
   public static final String REFINE                = "refine";
+  public static final String REFINE_STRATEGY       = "refine_strategy";
   public static final String REPLICATION_FACTOR    = "replication_factor";
   public static final String REQUEST_TIME          = "time";
   public static final String RESPONSE              = "response";

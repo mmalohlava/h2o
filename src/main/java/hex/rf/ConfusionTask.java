@@ -119,6 +119,16 @@ public class ConfusionTask extends MRTask {
           cmTask.invoke(datakey); // Invoke and wait for completion
           // Create final matrix
           CMFinal cmResult = CMFinal.make(cmTask._matrix, model, cmTask.domain(), cmTask._errorsPerTree, computeOOB);
+          if (false && model.size() == model._totalTrees) {
+            Log.info("Model     :" + model);
+            Log.info("Model size:" + model.size());
+            for (int i=0;i<cmTask._localMatrices.length;i++) {
+              CM localCM = cmTask._localMatrices[i];
+              Log.info("Node: " + i+ ":\n" + localCM + (localCM!=null ? "Misprediction: " + localCM.classError() : ""));
+            }
+            for (int i=0; i<model._localForests.length; i++) System.out.println("Node " + i + " " + Arrays.toString(model._localForests[i]));
+            Log.info("CM FINAL \n" + cmResult.toString() + "Mispredicton: " + cmResult.classError());
+          }
           // Atomically overwrite the dummy result
           // Doing update via atomic is a bad idea since it can be overwritten by DputIfMatch above - CMFinal.updateDKV(cmJob.dest(), cmResult);
           // Rather do it directly
@@ -200,6 +210,7 @@ public class ConfusionTask extends MRTask {
    * */
   public void map(Key chunkKey) {
     AutoBuffer cdata      = _data.getChunk(chunkKey);
+    System.out.println("Computing CM on: " + chunkKey);
     final int nchk       = (int) ValueArray.getChunkIndex(chunkKey);
     final int rows       = _data.rpc(nchk);
     final int cmin       = (int) _data._cols[_classcol]._min;
@@ -207,15 +218,16 @@ public class ConfusionTask extends MRTask {
 
     // Votes: we vote each tree on each row, holding on to the votes until the end
     int[][] votes = new int[rows][_N];
-    int[][] localVotes = _computeOOB ? new int[rows][_N] : null;
+    int[][] localVotes = new int[rows][_N]; //_computeOOB ? new int[rows][_N] : null;
     // Errors per tree
     _errorsPerTree = new long[_model.treeCount()];
     // Replay the Data.java's "sample_fair" sampling algorithm to exclude data
     // we trained on during voting.
+    byte[] histo = new byte[_N];
     for( int ntree = 0; ntree < _model.treeCount(); ntree++ ) {
       long    seed        = _model.seed(ntree);
       int     init_row    = _chunk_row_mapping[nchk];
-      boolean isLocalTree = _computeOOB ? isLocalTree(ntree) : false;
+      boolean isLocalTree = isLocalTree(ntree); //_computeOOB ? isLocalTree(ntree) : false;
       /* NOTE: Before changing used generator think about which kind of random generator you need:
        * if always deterministic or non-deterministic version - see hex.rf.Utils.get{Deter}RNG */
       seed = Sampling.chunkSampleSeed(seed, init_row);
@@ -243,31 +255,40 @@ public class ConfusionTask extends MRTask {
         // --- END OF CRUCIAL CODE ---
 
         // Predict with this tree - produce 0-based class index
-        int prediction = _model.classify0(ntree, _data, cdata, row, _modelDataMap, numClasses );
+        /*int prediction = _model.classify0(ntree, _data, cdata, row, _modelDataMap, numClasses );
         if( prediction >= numClasses ) continue ROWS; // Junk row cannot be predicted
         // Check tree miss
         int alignedPrediction = alignModelIdx(prediction);
         int alignedData       = alignDataIdx((int) _data.data(cdata, row, _classcol) - cmin);
         if (alignedPrediction != alignedData) _errorsPerTree[ntree]++;
         votes[row][alignedPrediction]++; // Vote the row
-        if (isLocalTree) localVotes[row][alignedPrediction]++; // Vote
+        if (isLocalTree) localVotes[row][alignedPrediction]++; // Vote */
+        byte[] prediction = _model.classify0(ntree, _data, cdata, row, _modelDataMap, histo);
+        if( prediction == null ) continue ROWS; // Junk row cannot be predicted
+        // Check tree miss
+        for(int i=0; i<prediction.length;i++) {
+          int alignedPrediction = alignModelIdx(i);
+          votes[row][alignedPrediction]+=prediction[i]; // Vote the row (percent vote)
+          if (isLocalTree) localVotes[row][alignedPrediction]+=prediction[i]; // Vote
+        }
       }
     }
     // Assemble the votes-per-class into predictions & score each row
     _matrix = computeCM(votes, cdata); // Make a confusion matrix for this chunk
     if (localVotes!=null) {
       _localMatrices = new CM[H2O.CLOUD.size()];
-      _localMatrices[H2O.SELF.index()] = computeCM(localVotes, cdata);
+      int nodeIdx = H2O.SELF.index();
+      _localMatrices[nodeIdx] = computeCM(localVotes, cdata);
     }
   }
 
   private boolean isLocalTree(int ntree) {
-    assert _computeOOB == true : "Make sense only for oobee";
+//    assert _computeOOB == true : "Make sense only for oobee";
     int idx  = H2O.SELF.index();
     Key tree = _model._tkeys[ntree];
     Key[] localForest = _model._localForests[idx];
     for(int i=0; i<localForest.length;i++) {
-      if (tree.equals(localForest[i])) return true;
+      if (localForest[i]!=null && tree.equals(localForest[i])) return true;
     }
     return false;
   }
@@ -279,6 +300,13 @@ public class ConfusionTask extends MRTask {
       _matrix = C._matrix;
     } else {
       _matrix = _matrix.add(C._matrix);
+    }
+    if (_localMatrices == null) {
+      _localMatrices = C._localMatrices;
+    } else {
+      for (int i=0; i<_localMatrices.length; i++) {
+        _localMatrices[i] = _localMatrices[i]!=null ? _localMatrices[i].add(C._localMatrices[i]) : C._localMatrices[i];
+      }
     }
     // Reduce tree errors
     long[] ept1 = _errorsPerTree;

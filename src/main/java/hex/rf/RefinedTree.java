@@ -2,7 +2,6 @@ package hex.rf;
 
 import hex.rf.Data.Row;
 import hex.rf.Statistic.Split;
-import hex.rf.Tree.LeafNode;
 
 import java.util.Arrays;
 import java.util.Stack;
@@ -19,10 +18,11 @@ public class RefinedTree extends Tree {
   final int _treeProducerIdx;
   final int _treeIdx; // tree idx in producer forest
 
-  public RefinedTree(Job job, Key orgiTreeKey, AutoBuffer serialTree, int treeProducerIdx, int treeIdx, int treeId, long seed, Data data, int maxDepth, StatType stat, int numSplitFeatures,
+  public RefinedTree(Job job, Key origTreeKey, AutoBuffer serialTree, int treeProducerIdx, int treeIdx, int treeId, long seed, Data data, int maxDepth, StatType stat, int numSplitFeatures,
       int exclusiveSplitLimit, Sampling sampler, int verbose, int nodesize) {
     super(job, data, maxDepth, stat, numSplitFeatures, seed, treeId, exclusiveSplitLimit, sampler, verbose, nodesize);
-    _origTreeKey = orgiTreeKey; // tree of key being refined
+    assert treeIdx == treeId : "Refined treeId and treeId do not match!";
+    _origTreeKey = origTreeKey; // tree of key being refined
     _serialTree = serialTree;
     _treeProducerIdx = treeProducerIdx;
     _treeIdx = treeIdx;
@@ -30,7 +30,7 @@ public class RefinedTree extends Tree {
 
   @Override public void compute2() {
     if (!_job.cancelled()) {
-      System.err.println("Refining tree: " + _data_id);
+      Log.debug("Refining tree: " + _treeId);
       Timer timer = new Timer();
       _stats[0]   = new ThreadLocal<Statistic>();
       _stats[1]   = new ThreadLocal<Statistic>();
@@ -42,7 +42,7 @@ public class RefinedTree extends Tree {
       // -------
 
       refine(d, null, _tree, 0);
-      Log.info("RF refinement took: " + timer);
+      Log.info("Tree id: " +_treeId + " refinement took: " + timer);
       // -------
 //      System.err.println(dumpTree("Tree after refine:\n"));
       // -------
@@ -85,9 +85,10 @@ public class RefinedTree extends Tree {
       } else {
         // do nothing  but just check if we obtain the same split class
         byte[] histo = d.histogram();
+        // Check the difference
         /*int oldPred = Utils.maxIndex(((LeafNode)tree)._classHisto);
         int newPred = Utils.maxIndex(histo);
-        if (oldPred!=newPred) Log.warn("Leaf refinement stop at leaf but predict different class! " + oldPred+"!="+newPred);*/
+        if (oldPred!=newPred && ((LeafNode)tree)._rows > d.rows() ) Log.warn("Leaf refinement stop at leaf but predict different class! " + oldPred+"!="+newPred);*/
         newNode = new LeafNode(histo, d.rows()); // OR use = tree
       }
       if (isLeft) parent._l = newNode; else parent._r = newNode;
@@ -106,12 +107,13 @@ public class RefinedTree extends Tree {
     return te.getRoot();
   }
 
+  /** Tree visitor extracting tree from its serialized format. */
   static class TreeExtractor extends TreeVisitor<RuntimeException> {
     Stack<INode> _nodes = new Stack<Tree.INode>();
 
     public TreeExtractor(AutoBuffer tbits) { super(tbits); }
-    @Override protected TreeVisitor<RuntimeException> leaf(byte[] tclass) {
-      _nodes.push(new LeafNode(Arrays.copyOf(tclass, tclass.length), 0));
+    @Override protected TreeVisitor<RuntimeException> leaf(int aRows, byte[] tclass) {
+      _nodes.push(new LeafNode(Arrays.copyOf(tclass, tclass.length), aRows));
       return this;
     }
     protected Tree.TreeVisitor<RuntimeException> post(int col, float fcmp) {
@@ -122,11 +124,23 @@ public class RefinedTree extends Tree {
       splitNode._l = left;
       _nodes.push(splitNode);
       return this;
-    };
+    }
     INode getRoot() {
       assert _nodes.size() == 1;
       return _nodes.peek();
     }
+  }
+
+  /** Simple prefix tree merge. */
+  public void mergeWith(INode tree) {
+    INode thisTree = _tree;
+    MergeTreesOp.merge(thisTree, null, tree, null);
+  }
+
+  public static enum Strategy {
+    APPEND,
+    MERGE,
+    MERGE_AND_APPEND,
   }
 }
 

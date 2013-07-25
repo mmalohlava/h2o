@@ -32,7 +32,7 @@ public class Tree extends H2OCountedCompleter {
   final StatType _type;         // Flavor of split logic
   final Data     _data;         // Data source
   final Sampling _sampler;      // Sampling strategy
-  final int      _data_id;      // Data-subset identifier (so trees built on this subset are not validated on it)
+  final int      _treeId;      // Data-subset identifier (so trees built on this subset are not validated on it)
   final int      _maxDepth;     // Tree-depth cutoff
   final int      _numSplitFeatures;  // Number of features to check at each splitting (~ split features)
   final Job      _job;          // DRF job building this tree
@@ -51,7 +51,7 @@ public class Tree extends H2OCountedCompleter {
     _job              = job;
     _data             = data;
     _type             = stat;
-    _data_id          = treeId;
+    _treeId           = treeId;
     _maxDepth         = maxDepth-1;
     _numSplitFeatures = numSplitFeatures;
     _seed             = seed;
@@ -62,9 +62,9 @@ public class Tree extends H2OCountedCompleter {
   }
 
   // Oops, uncaught exception
-  public boolean onExceptionalCompletion( Throwable ex, CountedCompleter _) {
+  public boolean onExceptionalCompletion( Throwable ex, CountedCompleter caller) {
     ex.printStackTrace();
-    return true;
+    return super.onExceptionalCompletion(ex, caller);
   }
 
   protected Statistic getStatistic(int index, Data data, long seed, int exclusiveSplitLimit) {
@@ -106,7 +106,7 @@ public class Tree extends H2OCountedCompleter {
   // Actually build the tree
   @Override public void compute2() {
     if(!_job.cancelled()) {
-      System.err.println("Building tree " + _data_id);
+      Log.debug("Building tree " + _treeId);
       Timer timer    = new Timer();
       _stats[0]      = new ThreadLocal<Statistic>();
       _stats[1]      = new ThreadLocal<Statistic>();
@@ -124,12 +124,12 @@ public class Tree extends H2OCountedCompleter {
       _stats = null; // GC
 
       // Atomically improve the Model as well
-      _thisTreeKey = appendKey(_job.dest(),toKey());
+      _thisTreeKey = appendKey(_job.dest(),toKey(),_treeId);
       // -------
 //      System.err.println(dumpTree("Tree after build:\n"));
       // -------
 
-      StringBuilder sb = new StringBuilder("[RF] Tree : ").append(_data_id+1);
+      StringBuilder sb = new StringBuilder("[RF] Tree : ").append(_treeId+1);
       sb.append(" d=").append(_tree.depth()).append(" leaves=").append(_tree.leaves()).append(" done in ").append(timer).append('\n');
       Log.debug(Sys.RANDF,_tree.toString(sb,  _verbose > 0 ? Integer.MAX_VALUE : 200).toString());
     }
@@ -140,12 +140,12 @@ public class Tree extends H2OCountedCompleter {
   // Stupid static method to make a static anonymous inner class
   // which serializes "for free".
   // Returns tree key.
-  static Key appendKey(Key model, final Key tKey) {
+  static Key appendKey(Key model, final Key tKey, final int localTreeId) {
     final int nodeIdx = H2O.SELF.index();
     new TAtomic<RFModel>() {
       @Override public RFModel atomic(RFModel old) {
         if(old == null) return null;
-        return RFModel.make(old,tKey,nodeIdx);
+        return RFModel.make(old,tKey,localTreeId,nodeIdx);
       }
     }.invoke(model);
 
@@ -235,10 +235,11 @@ public class Tree extends H2OCountedCompleter {
     @Override public void print(TreePrinter p) throws IOException { p.printNode(this); }
     @Override void write( AutoBuffer bs ) {
       bs.put1('[');             // Leaf indicator
+      bs.put4(_rows);
       for(int i=0; i<_classHisto.length;i++)
         bs.put1(_classHisto[i]);
     }
-    @Override int size_impl( ) { return 1+_classHisto.length; } // 1+# of classes bytes in serialized form
+    @Override int size_impl( ) { return 1+4+_classHisto.length; } // 1+# of classes bytes in serialized form
   }
 
   /** Gini classifier node. */
@@ -371,10 +372,18 @@ public class Tree extends H2OCountedCompleter {
 
   protected final AutoBuffer serialize() {
     AutoBuffer bs = new AutoBuffer();
-    bs.put4(_data_id);
+    bs.put4(_treeId);
     bs.put8(_seed);
     bs.put2((char)_data.classes());
     _tree.write(bs);
+    return bs;
+  }
+  protected static final AutoBuffer serialize(int dataId, long seed, int classes, INode tree) {
+    AutoBuffer bs = new AutoBuffer();
+    bs.put4(dataId);
+    bs.put8(seed);
+    bs.put2((char) classes);
+    tree.write(bs);
     return bs;
   }
   /** Write the Tree to a random Key homed here. */
@@ -387,18 +396,43 @@ public class Tree extends H2OCountedCompleter {
 
   /** Classify this serialized tree - withOUT inflating it to a full tree.
      Use row 'row' in the dataset 'ary' (with pre-fetched bits 'databits')
-     Returns classes from 0 to N-1*/
+     Returns leaf histogram or null if the tree does not allow for classification. */
+  public static byte[] classify( AutoBuffer ts, ValueArray ary, AutoBuffer databits, int row, int modelDataMap[], byte[] result ) {
+    ts.get4();    // Skip tree-id
+    ts.get8();    // Skip seed
+    int classes = ts.get2(); // Number of classes to reconstruct leaf histogram correctly
+    AutoBuffer traversedTs = traverse(ts, ary, databits, row, modelDataMap);
+    if (traversedTs==null) return null;
+    else {
+      ts.get4(); // number of affected training rows
+      for (int i=0; i<classes;i++) {
+        byte val = (byte) ts.get1();
+        result[i] = val;
+      }
+      return result;
+    }
+  }
+
+  /** Classify this serialized tree - withOUT inflating it to a full tree.
+  Use row 'row' in the dataset 'ary' (with pre-fetched bits 'databits')
+  Returns classes from 0 to N-1*/
   public static short classify( AutoBuffer ts, ValueArray ary, AutoBuffer databits, int row, int modelDataMap[], short badData ) {
     ts.get4();    // Skip tree-id
     ts.get8();    // Skip seed
-    int classes = ts.get2();
+    int classes = ts.get2(); // Number of classes to reconstruct leaf histogram correctly
+    AutoBuffer traversedTs = traverse(ts, ary, databits, row, modelDataMap);
+    if (traversedTs==null) return badData;
+    else return findMajorityIdx(traversedTs, classes);
+  }
+
+  static AutoBuffer traverse( AutoBuffer ts, ValueArray ary, AutoBuffer databits, int row, int modelDataMap[]) {
     byte b;
 
     while( (b = (byte) ts.get1()) != '[' ) { // While not a leaf indicator
       assert b == '(' || b == 'S' || b == 'E';
       int col = modelDataMap[ts.get2()]; // Column number in model-space mapped to data-space
       float fcmp = ts.get4f();  // Float to compare against
-      if( ary.isNA(databits, row, col) ) return badData;
+      if( ary.isNA(databits, row, col) ) return null;
       float fdat = (float)ary.datad(databits, row, col);
       int skip = (ts.get1()&0xFF);
       if( skip == 0 ) skip = ts.get3();
@@ -410,12 +444,13 @@ public class Tree extends H2OCountedCompleter {
         if( fdat > fcmp ) ts.position(ts.position() + skip);
       }
     }
-    return findMajorityIdx(ts, classes); // Find a majority class in the leaf
+    return ts;
   }
 
   private static short findMajorityIdx(AutoBuffer ts, int bytesLen) {
     int  maxIdx = 0;
     byte maxVal = -1;
+    ts.get4();
     for (int i=0; i<bytesLen;i++) {
       byte val = (byte) ts.get1();
       if (val>maxVal) { maxVal = val; maxIdx = i; }
@@ -456,12 +491,13 @@ public class Tree extends H2OCountedCompleter {
     return sb.toString();
   }
 
-  public static int dataId( byte[] bits) { return UDP.get4(bits, 0); }
+  public static int treeId( byte[] bits) { return UDP.get4(bits, 0); }
   public static long seed ( byte[] bits) { return UDP.get8(bits, 4); }
+  public static int classes( byte[] bits) { return UDP.get2(bits, 4+8); }
 
   /** Abstract visitor class for serialized trees.*/
   public static abstract class TreeVisitor<T extends Exception> {
-    protected TreeVisitor<T> leaf( byte[] tclass ) throws T { return this; }
+    protected TreeVisitor<T> leaf( int aRows, byte[] tclass ) throws T { return this; }
     protected TreeVisitor<T>  pre( int col, float fcmp, int off0, int offl, int offr ) throws T { return this; }
     protected TreeVisitor<T>  mid( int col, float fcmp ) throws T { return this; }
     protected TreeVisitor<T> post( int col, float fcmp ) throws T { return this; }
@@ -480,8 +516,9 @@ public class Tree extends H2OCountedCompleter {
     public final TreeVisitor<T> visit() throws T {
       byte b = (byte) _ts.get1();
       if( b == '[' ) {
+        int affectedRows = _ts.get4();
         for(int i=0;i<_classes;i++) _histo[i] = (byte) _ts.get1();
-        return leaf(_histo);
+        return leaf(affectedRows, _histo);
       }
       assert b == '(' || b == 'S' || b =='E' : b;
       int off0 = _ts.position()-1;    // Offset to start of *this* node
@@ -499,7 +536,7 @@ public class Tree extends H2OCountedCompleter {
   public static long depth_leaves( AutoBuffer tbits ) {
     return new TreeVisitor<RuntimeException>(tbits) {
       int _maxdepth, _depth, _leaves;
-      @Override protected TreeVisitor leaf(byte[] tclass ) { _leaves++; if( _depth > _maxdepth ) _maxdepth = _depth; return this; }
+      @Override protected TreeVisitor leaf(int aRows, byte[] tclass ) { _leaves++; if( _depth > _maxdepth ) _maxdepth = _depth; return this; }
       @Override protected TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) { _depth++; return this; }
       @Override protected TreeVisitor post(int col, float fcmp ) { _depth--; return this; }
       @Override long result( ) {return ((long)_maxdepth<<32) | _leaves; }

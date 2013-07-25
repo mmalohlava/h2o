@@ -1,5 +1,6 @@
 package hex.rf;
 
+import hex.rf.RefinedTree.Strategy;
 import hex.rf.Tree.StatType;
 
 import java.util.Arrays;
@@ -24,10 +25,10 @@ public abstract class DRF {
   public static final DRFJob execute(Key modelKey, int[] cols, ValueArray ary, int ntrees, int depth, int binLimit,
       StatType stat, long seed, boolean parallelTrees, double[] classWt, int numSplitFeatures,
       Sampling.Strategy samplingStrategy, float sample, float[] strataSamples, int verbose, int exclusiveSplitLimit,
-      boolean useNonLocalData, int nodesize, boolean refine) {
+      boolean useNonLocalData, int nodesize, boolean refine, Strategy refineStrategy) {
 
     // Create DRF remote task
-    final DRFTask drfTask = create(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, nodesize, refine);
+    final DRFTask drfTask = create(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, nodesize, refine, refineStrategy);
     // Create DRF user job & start it
     final DRFJob  drfJob  = new DRFJob(jobName(drfTask), modelKey);
     drfJob.start(drfTask);
@@ -44,7 +45,7 @@ public abstract class DRF {
     Key modelKey, int[] cols, ValueArray ary, int ntrees, int depth, int binLimit,
     StatType stat, long seed, boolean parallelTrees, double[] classWt, int numSplitFeatures,
     Sampling.Strategy samplingStrategy, float sample, float[] strataSamples,
-    int verbose, int exclusiveSplitLimit, boolean useNonLocalData, int nodesize, boolean refine) {
+    int verbose, int exclusiveSplitLimit, boolean useNonLocalData, int nodesize, boolean refine, Strategy refineStrategy) {
 
     // Construct the RFModel to be trained
     DRFTask drf  = new DRFTask();
@@ -54,7 +55,8 @@ public abstract class DRF {
     // But it will need to be changed with new fluid vectors
     //assert ary._rpc == null : "DRF does not support different sizes of chunks for now!";
     int numrows = (int) (ValueArray.CHUNK_SZ/ary._rowsize);
-    drf._params = DRFParams.create(cols[cols.length-1], ntrees, depth, numrows, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, nodesize, refine);
+    drf._params = DRFParams.create(cols[cols.length-1], ntrees, depth, numrows, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, nodesize, refine, refineStrategy);
+    Log.info("DRF params: " + drf._params);
     // Verbose debug print
     if (verbose>0) dumpRFParams(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData);
     // Validate parameters
@@ -131,6 +133,10 @@ public abstract class DRF {
     }
 
     @Override public final void reduce( DRemoteTask drt ) { }
+    @Override public boolean onExceptionalCompletion(Throwable ex, CountedCompleter caller) {
+      ex.printStackTrace();
+      return super.onExceptionalCompletion(ex, caller);
+    }
 
     /** Write number of split features computed on this node to a model */
     static void updateRFModel(Key modelKey, final int numSplitFeatures) {
@@ -219,12 +225,14 @@ public abstract class DRF {
     int _nodesize;
     /** Use non-local data for tree refinement */
     boolean _refine;
+    /** Refine strategy */
+    Strategy _refineStrategy;
 
     public static final DRFParams create(int col, int ntrees, int depth, int numrows, int binLimit,
         StatType statType, long seed, boolean parallelTrees, double[] classWt,
         int numSplitFeatures, Sampling.Strategy samplingStrategy, float sample,
         float[] strataSamples, int verbose, int exclusiveSplitLimit,
-        boolean useNonLocalData, int nodesize, boolean refine) {
+        boolean useNonLocalData, int nodesize, boolean refine, Strategy refineStrategy) {
 
       DRFParams drfp = new DRFParams();
       drfp._ntrees           = ntrees;
@@ -245,8 +253,20 @@ public abstract class DRF {
       drfp._useNonLocalData  = useNonLocalData;
       drfp._nodesize         = nodesize;
       drfp._refine           = refine;
+      drfp._refineStrategy   = refineStrategy;
       return drfp;
     }
+
+    @Override public String toString() {
+      return "DRFParams [_ntrees=" + _ntrees + "\n, _parallel=" + _parallel + "\n, _depth=" + _depth + "\n, _stat="
+          + _stat + "\n, _classcol=" + _classcol + "\n, _samplingStrategy=" + _samplingStrategy + "\n, _sample="
+          + _sample + "\n, _binLimit=" + _binLimit + "\n, _classWt=" + Arrays.toString(_classWt)
+          + "\n, _exclusiveSplitLimit=" + _exclusiveSplitLimit + "\n, _verbose=" + _verbose + "\n, _numSplitFeatures="
+          + _numSplitFeatures + "\n, _strataSamples=" + Arrays.toString(_strataSamples) + "\n, _useNonLocalData="
+          + _useNonLocalData + "\n, _numrows=" + _numrows + "\n, _seed=" + _seed + "\n, _nodesize=" + _nodesize
+          + "\n, _refine=" + _refine + "\n, _refineStrategy=" + _refineStrategy + "]";
+    }
+
   }
 
   /** DRF job showing progress with reflect to a number of generated trees. */

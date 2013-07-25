@@ -84,11 +84,11 @@ public class GraphvizTreePrinter extends TreePrinter {
     try {
       _dest.append("digraph {\n");
       new Tree.TreeVisitor<IOException>(tbits) {
-        @Override protected Tree.TreeVisitor leaf(byte[] classHisto ) throws IOException {
+        @Override protected Tree.TreeVisitor leaf(int aRows, byte[] classHisto ) throws IOException {
           int tclass = Utils.maxIndex(classHisto);
           String x = _classNames != null && tclass < _classNames.length
-            ? String.format("%d [label=\"%s\n%s\"];\n"      , _ts.position()-_classes-1, _classNames[tclass], Arrays.toString(classHisto))
-            : String.format("%d [label=\"Majority Class %d\n%s\"];\n", _ts.position()-_classes-1, tclass, Arrays.toString(classHisto));
+            ? String.format("%d [label=\"%s\n%s\"];\n"      , _ts.position()-_classes-1-4, _classNames[tclass], Arrays.toString(classHisto))
+            : String.format("%d [label=\"Majority Class %d\n%s\"];\n", _ts.position()-_classes-1-4, tclass, Arrays.toString(classHisto));
           _dest.append(x);
           return this;
         }

@@ -63,7 +63,7 @@ public class RFView extends /* Progress */ Request {
     if (weights != null)
       redirect.addProperty(WEIGHTS, weights);
     redirect.addProperty(OOBEE, oobee);
-    redirect.addProperty(ITERATIVE_CM, oobee);
+    redirect.addProperty(ITERATIVE_CM, iterativeCM);
 
     return Response.redirect(fromPageResponse, RFView.class, redirect);
   }
@@ -129,7 +129,7 @@ public class RFView extends /* Progress */ Request {
 
     JsonObject response = defaultJsonResponse();
     // CM return and possible computation is requested
-    if (!_noCM.value() && (finished==tasks || _iterativeCM.value()) && finished > 0) {
+    if (!_noCM.value() && (finished>=tasks || _iterativeCM.value()) && finished > 0) {
       // Compute the highest number of trees which is less then a threshold
       int modelSize = tasks * _refreshTresholdCM.value()/100;
       modelSize     = modelSize == 0 || finished==tasks ? finished : modelSize * (finished/modelSize);
@@ -171,9 +171,9 @@ public class RFView extends /* Progress */ Request {
         cm.addProperty(JSON_CM_TREES,modelSize);
         response.add(JSON_CM,cm);
         // Signal end only and only if all trees were generated and confusion matrix is valid
-        done = finished == tasks;
+        done = finished >= tasks;
       }
-    } else if (_noCM.value() && finished == tasks) done = true;
+    } else if (_noCM.value() && finished >= tasks) done = true;
 
     // Trees
     JsonObject trees = new JsonObject();
@@ -185,9 +185,7 @@ public class RFView extends /* Progress */ Request {
     response.add(Constants.TREES,trees);
 
     if (!_job.value().equals("NONE")) {
-      System.err.println("BEFORE Checking if job " + _job.value() + " is done: " + done);
       done &= Job.isDone(_job.value());
-      System.err.println("AFTER Checking if job " + _job.value() + " is done: " + done);
     }
 
     // Build a response

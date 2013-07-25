@@ -3,6 +3,7 @@ package hex.rf;
 import hex.rf.ConfusionTask.CMFinal;
 import hex.rf.DRF.DRFJob;
 import hex.rf.DRF.DRFParams;
+import hex.rf.RefinedTree.*;
 import hex.rf.Tree.StatType;
 import hex.rng.H2ORandomRNG.RNGKind;
 
@@ -56,10 +57,12 @@ public class RandomForest {
   }
 
   public static void refine(final Job job, final DRFParams drfParams, final Data data, int ntrees, int numSplitFeatures) {
+    final Timer timerRefinement = new Timer();
     int idx = 0;
     int nodeIdx = H2O.SELF.index();
     Sampling sampler = createSampler(drfParams);
 
+    Log.info("Starting refinement...");
     while (idx < drfParams._ntrees-ntrees) {
       RFModel m = UKV.get(job.dest());
       Key[][] refinedForests = m._refinedForests[nodeIdx]; // this is a forest of trees which this node refined
@@ -68,11 +71,11 @@ public class RandomForest {
         if (i == nodeIdx) continue; // do not refine self
         Key[] targetNodeForest = m._localForests[i];
         for (int j=0; j<targetNodeForest.length; j++) {
-          if (j>=refinedForests[i].length || refinedForests[i][j]==null) {
+          if (targetNodeForest[j]!=null && (j>=refinedForests[i].length || refinedForests[i][j]==null)) {
             Key tKey = targetNodeForest[j];
             byte[] serialTree = DKV.get(tKey).memOrLoad();
             long seed = Tree.seed(serialTree);
-            int treeId = Tree.dataId(serialTree);
+            int treeId = Tree.treeId(serialTree);
             trees.add(new RefinedTree(job, tKey, new AutoBuffer(serialTree), i, j, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
             idx++;
           }
@@ -84,20 +87,33 @@ public class RandomForest {
         try { Thread.sleep(500); } catch (InterruptedException _) {};
       }
     }
-    System.err.println("Refinement done on: " + nodeIdx);
+    DKV.write_barrier();
+    Log.info("Refinement done on node: " + nodeIdx + " in: " + timerRefinement);
+
+    switch( drfParams._refineStrategy ) {
+      case MERGE : refineMerge (job, drfParams, ntrees); break;
+      case APPEND: refineAppend(job, drfParams, ntrees); break;
+      default: break;
+    }
+  }
+
+  // Append refined trees produced by this node to a global RFModel
+  private static void refineAppend(Job job, DRFParams drfParams, int ntrees) {
+    final Timer timerAppend = new Timer();
+    int nodeIdx = H2O.SELF.index();
     RFModel m = UKV.get(job.dest());
     final Key[][] refinedForests = m._refinedForests[nodeIdx];
-    final int numOfTrees = idx;
+    final int numOfTrees = drfParams._ntrees - ntrees;
     final Key[] allRefinedTrees = new Key[numOfTrees];
-    idx = 0;
+    int idx = 0;
+    Log.info("Starting refineAppend - refined tree by node " + nodeIdx);
     for(int i=0; i< refinedForests.length;i++) {
-      System.err.println("Node " + i);
+      Log.debug("> Node " + i);
       for (int j=0; j<refinedForests[i].length; j++) {
-        System.err.println(" > Tree: " + refinedForests[i][j]);
+        Log.debug(">> Tree: " + refinedForests[i][j]);
         allRefinedTrees[idx++] = refinedForests[i][j];
       }
     }
-
     new TAtomic<RFModel>() {
       @Override public RFModel atomic(RFModel old) {
         RFModel newm = old.clone();
@@ -109,6 +125,44 @@ public class RandomForest {
         return newm;
       }
     }.invoke(job.dest());
+    DKV.write_barrier();
+    Log.info("Append done in " + timerAppend);
+  }
+
+  // Merge this node trees.
+  // For each my tree, try to merge it with all its refined versions produced by other nodes.
+  private static void refineMerge(Job job, DRFParams drfParams, int ntrees) {
+    final Timer timerMerge = new Timer();
+    final int nodeIdx = H2O.SELF.index();
+    final int totalNodes = H2O.CLOUD.size();
+    final int numOfTrees = drfParams._ntrees - ntrees; // Number of trees to merge
+    int[] sindx = new int[ntrees]; // list indices of node which should be merged as next
+    List<MergeTreesOp> ops = new ArrayList<MergeTreesOp>(ntrees);
+    Log.info("Starting refineMerge...");
+
+    int tcnt = 0;
+    while (tcnt < numOfTrees) {
+      RFModel rfModel = UKV.get(job.dest());
+      ops.clear();
+      for(int i=0; i<sindx.length; i++) {
+        int rnIdx = sindx[i];
+        if (rnIdx==nodeIdx) rnIdx++; // skip this node
+        if (rnIdx < totalNodes) {
+          Key masterTKey = rfModel._localForests[nodeIdx][i];
+          Key[][] refinedForest = rfModel._refinedForests[rnIdx];
+          if (refinedForest[nodeIdx]!=null && i<refinedForest[nodeIdx].length && refinedForest[nodeIdx][i]!=null) {
+            Log.info("Merging master tree " + i + " from node " + nodeIdx + " with tree from node " + rnIdx);
+            Key refinedTKey = rfModel._refinedForests[rnIdx][nodeIdx][i];
+            ops.add(new MergeTreesOp(job.dest(), masterTKey, refinedTKey));
+            sindx[i] = ++rnIdx;
+          }
+        }
+      }
+      if (!ops.isEmpty()) ForkJoinTask.invokeAll(ops);
+      tcnt += ops.size();
+    }
+    DKV.write_barrier();
+    Log.info("Merge done in " + timerMerge);
   }
 
   static Sampling createSampler(final DRFParams params) {
@@ -253,7 +307,7 @@ public class RandomForest {
                           ARGS.exclusive,
                           false,
                           ARGS.nodesize,
-                          false);
+                          false, null);
     RFModel model = drfJob.get();  // block on all nodes!
     Log.debug(Sys.RANDF,"Random forest finished in TODO"/*+ drf._t_main*/);
 

@@ -2,6 +2,7 @@ package water.api;
 
 import hex.rf.*;
 import hex.rf.DRF.DRFJob;
+import hex.rf.RefinedTree.Strategy;
 import hex.rf.Tree.StatType;
 
 import java.util.*;
@@ -29,13 +30,14 @@ public class RF extends Request {
   protected final H2OKey            _modelKey   = new H2OKey(MODEL_KEY, RFModel.makeKey());
   /* Advanced settings */
   protected final Int               _binLimit   = new Int(BIN_LIMIT,1024, 0,65534);
-  protected final Int               _nodesize   = new Int(NODE_SIZE, 1, 1, Byte.MAX_VALUE);
+  protected final Int               _nodesize   = new Int(NODESIZE, 1, 1, Byte.MAX_VALUE);
   protected final LongInt           _seed       = new LongInt(SEED,0xae44a87f9edf1cbL,"High order bits make better seeds");
   protected final Bool              _parallel   = new Bool(PARALLEL,true,"Build trees in parallel");
   protected final Int               _exclusiveSplitLimit = new Int(EXCLUSIVE_SPLIT_LIMIT, null, 0, Integer.MAX_VALUE);
   protected final Bool              _iterativeCM         = new Bool(ITERATIVE_CM, true, "Compute confusion matrix on-the-fly");
   protected final Bool              _useNonLocalData     = new Bool(USE_NON_LOCAL_DATA, false, "Try to use also non-local data.");
   protected final Bool              _refine              = new Bool(REFINE, false, "Try to rotate trees around the cloud and refine them based on non-local data.");
+  protected final EnumArgument<Strategy> _refineStrategy = new EnumArgument<RefinedTree.Strategy>(REFINE_STRATEGY, Strategy.MERGE);
 
   /** Return the query link to this page */
   public static String link(Key k, String content) {
@@ -140,7 +142,8 @@ public class RF extends Request {
               exclusiveSplitLimit,
               _useNonLocalData.value(),
               _nodesize.value(),
-              _refine.value()
+              _refine.value(),
+              _refineStrategy.value()
               );
       // Collect parameters required for validation.
       JsonObject response = new JsonObject();
