@@ -217,7 +217,8 @@ def runRFView(node=None, data_key=None, model_key=None, ntree=None,
         # and we had problems with races/doneness before
         errorInResponse = \
             numberBuilt<0 or ntree<0 or \
-            progress<0 or progressTotal<0 or progress>progressTotal
+            progress<0 or progressTotal<0 
+            #or progress>progressTotal
             ## progressTotal!=ntree or
             # rfView better always agree with what RF ntree was
 
