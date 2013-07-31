@@ -43,12 +43,11 @@ public class RefinedTree extends Tree {
       _tree = extractTree(_serialTree);
 //      System.err.println(dumpTree("Tree after load:\n"));
       refine(d, null, _tree, 0);
-      Log.info("Tree id: " +_treeId + " from: " + _treeProducerIdx + "refinement took: " + timer);
+      Log.info("Tree id: " +_treeId + " from: " + _treeProducerIdx + " refinement took: " + timer);
 //      System.err.println(dumpTree("Tree after refine:\n"));
 
-      updateKey(_origTreeKey, serialize());
-//      if (_afterAction!=null)
-//        _afterAction.run(this);
+      if (_afterAction!=null)
+        _afterAction.run(this);
     }
     tryComplete();
   }

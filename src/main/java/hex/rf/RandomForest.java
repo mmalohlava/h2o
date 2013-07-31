@@ -60,7 +60,7 @@ public class RandomForest {
     final int selfNIdx = H2O.SELF.index();
     RFModel m = UKV.get(job.dest());
     final Key[] selfRF = m._localForests[selfNIdx];
-    sendToNextNode(job, selfRF); DKV.write_barrier();
+    sendToNextNode(job, selfRF);
 
     // 2) look into my queue for trees for refinement
     Sampling sampler = createSampler(drfParams);
@@ -69,7 +69,7 @@ public class RandomForest {
     LinkedList<RefinedTree> lops = new LinkedList<RefinedTree>();
     int cnt = 0;
     int totalTrees = m._totalTrees - ntrees;
-    while (cnt < totalTrees /*+ ntrees*/) {
+    while (cnt < totalTrees + ntrees) {
       ops.clear();
       lops.clear();
       m = UKV.get(job.dest()); // get RF model view
@@ -83,11 +83,11 @@ public class RandomForest {
           ops.add(new RefinedTree(RefinedTree.UPDATE_KEY_ACTION, job,treeToRefine, new AutoBuffer(serialTree), -1, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
           cnt++;
         } else { // it is a local node
-//          byte[] serialTree = DKV.get(treeToRefine).memOrLoad();
-//          long seed  = Tree.seed(serialTree);
-//          int treeId = Tree.treeId(serialTree);
-//          lops.add(new RefinedTree(RefinedTree.UPDATE_KEY_ACTION, job,treeToRefine, new AutoBuffer(serialTree), -1, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
-//          cnt++;
+          byte[] serialTree = DKV.get(treeToRefine).memOrLoad();
+          long seed  = Tree.seed(serialTree);
+          int treeId = Tree.treeId(serialTree);
+          lops.add(new RefinedTree2(RefinedTree.UPDATE_KEY_ACTION, job,treeToRefine, new AutoBuffer(serialTree), -1, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+          cnt++;
         }
       }
       if (!ops.isEmpty()) {
@@ -96,7 +96,6 @@ public class RandomForest {
         Key keys[] = new Key[ops.size()];
         for(int i=0;i<ops.size();i++) keys[i] = ops.get(i)._origTreeKey;
         sendToNextNode(job, keys);
-        DKV.write_barrier();
       } else if (!lops.isEmpty()) {
         ForkJoinTask.invokeAll(lops); // refine tree
         DKV.write_barrier();
@@ -116,6 +115,7 @@ public class RandomForest {
         return RFModel.updateRQ(old, targetNIdx, keys);
       }
     }.invoke(job.dest());
+    DKV.write_barrier();
   }
 
   public static void refineByMerging(final Job job, final DRFParams drfParams, final Data data, int ntrees, int numSplitFeatures) {

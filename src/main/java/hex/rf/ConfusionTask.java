@@ -434,7 +434,9 @@ public class ConfusionTask extends MRTask {
         if( m1 == null ) _matrix = m2;  // Take other work straight-up
         else {
           for( int i = 0; i < m1.length; i++ )
-            for( int j = 0; j < m1.length; j++ )  m1[i][j] += m2[i][j];
+            for( int j = 0; j < m1.length; j++ )  {
+              m1[i][j] += m2[i][j];
+            }
         }
         _rows    += cm._rows;
         _errors  += cm._errors;
