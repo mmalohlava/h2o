@@ -9,6 +9,7 @@ import org.apache.commons.codec.binary.StringUtils;
 import water.*;
 import water.Job.Progress;
 import water.api.Constants;
+import water.api.RF;
 import water.util.*;
 import water.util.Log.Tag.Sys;
 
@@ -44,6 +45,8 @@ public class RFModel extends Model implements Cloneable, Progress {
   /** Total time in seconds to produce model */
   public long      _time;
 
+  public Key[][]   _refineQueues; // Queues for refining
+
   public transient byte[][] _trees; // The raw tree data, for faster classification passes
 
   public static final String KEY_PREFIX = "__RFModel_";
@@ -66,8 +69,10 @@ public class RFModel extends Model implements Cloneable, Progress {
     _nodesSplitFeatures = new int[size];
     _localForests       = new Key[size][];
     _refinedForests     = new Key[size][size][];
+    _refineQueues       = new Key[size][];
     _nodesize = nodesize;
     for(int i=0;i<size;i++) _localForests[i] = new Key[0];
+    for(int i=0;i<size;i++) _refineQueues[i] = new Key[0];
     for(int i=0;i<size;i++) for(int j=0;j<size;j++) _refinedForests[i][j] = new Key[0];
     for( Key tkey : _tkeys ) assert DKV.get(tkey)!=null;
   }
@@ -128,6 +133,16 @@ public class RFModel extends Model implements Cloneable, Progress {
       myRefinedForest[treeProducerIdx] = targetForest;
     }
 
+    return m;
+  }
+
+  static public RFModel updateRQ(RFModel old, int nodeIdx, Key... tkey) {
+    RFModel m = old.clone();
+    Key[] nodeQueue = m._refineQueues[nodeIdx];
+    int len = nodeQueue.length;
+    nodeQueue = Arrays.copyOf(nodeQueue, nodeQueue.length + tkey.length);
+    for(int i=0; i<tkey.length;i++) nodeQueue[len+i] = tkey[i];
+    m._refineQueues[nodeIdx] = nodeQueue;
     return m;
   }
 
@@ -281,5 +296,13 @@ public class RFModel extends Model implements Cloneable, Progress {
     }
     res.add("trees", vals);
     return res;
+  }
+
+  boolean isTreeFromNode(Key tKey, int indx) {
+    assert tKey != null;
+    for (int i=0; i<_localForests[indx].length; i++) {
+      if (_localForests[indx][i]!=null && tKey.equals(_localForests[indx][i])) return true;
+    }
+    return false;
   }
 }

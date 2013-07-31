@@ -127,7 +127,7 @@ public abstract class DRF {
       RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures);
       // Refined random forest
       if (_params._refine)
-        RandomForest.refine(_job, _params, localData, ntrees, numSplitFeatures);
+        RandomForest.refineByRotating(_job, _params, localData, ntrees, numSplitFeatures);
       // Wait for the running jobs
       tryComplete();
     }

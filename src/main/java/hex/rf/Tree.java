@@ -61,12 +61,6 @@ public class Tree extends H2OCountedCompleter {
     _nodesize         = nodesize;
   }
 
-  // Oops, uncaught exception
-  public boolean onExceptionalCompletion( Throwable ex, CountedCompleter caller) {
-    ex.printStackTrace();
-    return super.onExceptionalCompletion(ex, caller);
-  }
-
   protected Statistic getStatistic(int index, Data data, long seed, int exclusiveSplitLimit) {
     Statistic result = _stats[index].get();
     if( result==null ) {
@@ -106,7 +100,7 @@ public class Tree extends H2OCountedCompleter {
   // Actually build the tree
   @Override public void compute2() {
     if(!_job.cancelled()) {
-      Log.debug("Building tree " + _treeId);
+      Log.info("Building tree " + _treeId + " on node " + H2O.SELF.index());
       Timer timer    = new Timer();
       _stats[0]      = new ThreadLocal<Statistic>();
       _stats[1]      = new ThreadLocal<Statistic>();

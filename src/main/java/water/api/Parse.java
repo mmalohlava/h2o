@@ -170,7 +170,7 @@ public class Parse extends Request {
       if( value.equals("1") ) sb.append("checked");
       sb.append("/>&nbsp;&nbsp;").append(queryDescription()).append("<p>");
       String[][] data = psetup._setup._data;
-      if( data != null ) {
+      if( false && data != null ) {
         int sep = psetup._setup._separator;
         sb.append("<div class='alert'><b>");
         sb.append(String.format("Detected %d columns using '%s' (\\u%04d) as a separator.", data[0].length,sep<33 ? WHITE_DELIMS[sep] : Character.toString((char)sep),sep));

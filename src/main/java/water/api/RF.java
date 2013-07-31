@@ -17,7 +17,7 @@ public class RF extends Request {
 
   protected final H2OHexKey         _dataKey    = new H2OHexKey(DATA_KEY);
   protected final HexKeyClassCol    _classCol   = new HexKeyClassCol(CLASS, _dataKey);
-  protected final Int               _numTrees   = new Int(NUM_TREES,50,0,Integer.MAX_VALUE);
+  protected final Int               _numTrees   = new Int(NUM_TREES,2,0,Integer.MAX_VALUE);
   protected final Int               _features   = new Int(FEATURES, null, 1, Integer.MAX_VALUE);
   protected final Int               _depth      = new Int(DEPTH,Integer.MAX_VALUE,0,Integer.MAX_VALUE);
   protected final EnumArgument<StatType> _statType = new EnumArgument<Tree.StatType>(STAT_TYPE, StatType.ENTROPY);

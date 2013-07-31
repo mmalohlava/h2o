@@ -169,16 +169,17 @@ public class Data implements Iterable<Row> {
   ColumnInfo[] _columnInfo;
 
   public final byte[] histogram() {
+    int[] votes = new int[classes()];
     byte[] histo = new byte[classes()];
     Iterator<Row> it = iterator();
     int total = 0;
     while (it.hasNext()) {
       Row r = it.next();
       int c = unmapClass(r.classOf());
-      histo[c]++;
+      votes[c]++;
       total++;
     }
-    for (int i=0; i<histo.length; i++) histo[i] = total==0 ? 0 : (byte) (100*histo[i]/total);
+    for (int i=0; i<histo.length; i++) histo[i] = total==0 ? 0 : (byte) (100*votes[i]/total);
     return histo;
   }
 }

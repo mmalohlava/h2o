@@ -758,6 +758,11 @@ class H2O(object):
             pass
         time.sleep(1) # a little delay needed?
         return(True)
+    
+    def data_distrib(self, key):
+        return self.__do_json_request(
+            'DataDistrib.json', 
+            params={"data_key": key})
 
     def put_value(self, value, key=None, repl=None):
         return self.__do_json_request(

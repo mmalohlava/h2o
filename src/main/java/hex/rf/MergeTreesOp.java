@@ -25,7 +25,7 @@ public class MergeTreesOp extends H2OCountedCompleter {
     // FIXME now we should decide if merge tree is better or not
     byte[] mtab = RefinedTree.serialize(Tree.treeId(mtb), Tree.seed(mtb), Tree.classes(mtb), mt).buf();
     updateTKey(_masterTree, mtab);
-    //appendTree(_rfModel, mtab);
+//    appendTree(_rfModel, mtab);
     tryComplete();
   }
 
@@ -50,6 +50,20 @@ public class MergeTreesOp extends H2OCountedCompleter {
   static final LeafNode  asLeaf (INode n) { return (LeafNode) n; }
   static final SplitNode asSplit(INode n) { return (SplitNode) n; }
 
+  static INode mergeNodes(INode n, LeafNode l) {
+    if (n.isLeaf()) return mergeNodes(asLeaf(n), l);
+    SplitNode sn = asSplit(n);
+    INode left = mergeNodes(sn._l, l);
+    sn._l = left;
+    INode right = mergeNodes(sn._r, l);
+    sn._r = right;
+    return n;
+  }
+
+  static INode mergeNodes(LeafNode l1, LeafNode l2) {
+    byte[] mhisto = mergeHisto(l1, l2);
+    return new LeafNode(mhisto, l1._rows+l2._rows);
+  }
   static byte[] mergeHisto(LeafNode l1, LeafNode l2) {
     byte[] h1 = l1._classHisto; int ar1 = l1._rows;
     byte[] h2 = l2._classHisto; int ar2 = l2._rows;
@@ -58,6 +72,7 @@ public class MergeTreesOp extends H2OCountedCompleter {
     float k1 = ar1/(float)(ar1+ar2);
     float k2 = ar2/(float)(ar1+ar2);
     float sum = 0;
+    // k1 = 1; k2 =1; // do not apply weights
     for (int i=0;i<h1.length;i++) sum += k1*h1[i] + k2*h2[i];
     for (int i=0;i<h1.length;i++) h[i] = (byte) ((k1*h1[i] + k2*h2[i])*100/sum);
     return h;

@@ -6,12 +6,12 @@ import h2o, h2o_cmd, h2o_hosts, h2o_rf
 # RF train parameters
 
 bench_params = {
-        'nodes_count'  : 3,
-        'java_heap_GB' : 2
+        'nodes_count'  : 2,
+        'java_heap_GB' : 3
         }
 
 paramsTrainRF = { 
-            'ntree'      : 50, 
+            'ntree'      : 10, 
             #'depth'      : 300,
             'parallel'   : 1, 
             'bin_limit'  : 1024,
@@ -19,6 +19,8 @@ paramsTrainRF = {
             'out_of_bag_error_estimate': 1, 
             'exclusive_split_limit'    : 0,
             'timeoutSecs': 14800,
+            'nodesize'   : 1,
+            'sample'     : 67,
             }
 
 # RF test parameters
@@ -27,21 +29,22 @@ paramsScoreRF = {
             'out_of_bag_error_estimate': 0, 
         }
 
+DATASET_NAME="iris20kcols"
+DATASET_NAME="covtype"
+
 trainDS = {
-        's3bucket'    : 'h2o-datasets',
-        'filename'    : 'covtype.data',
+        'dataset'     : 'bench/{0}/R'.format(DATASET_NAME),
+        'filename'    : 'train.csv',
         'timeoutSecs' : 14800,
         'header'      : 1
         }
 
 scoreDS = {
-        's3bucket'    : 'h2o-datasets',
-        'filename'    : 'covtype.data',
+        'dataset'     : 'bench/{0}/R'.format(DATASET_NAME),
+        'filename'    : 'test.csv',
         'timeoutSecs' : 14800,
         'header'      : 1
         }
-
-PARSE_TIMEOUT=14800
 
 class Basic(unittest.TestCase):
 
@@ -56,31 +59,39 @@ class Basic(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         h2o.tear_down_cloud()
+
+    def loadAndParse(self, conf):
+        df = h2o.find_dataset("{0}/{1}".format(conf['dataset'], conf['filename']))
+        key = h2o_cmd.parseFile(csvPathname=df, header=conf['header'],timeoutSecs=conf['timeoutSecs'])
+        dd  = h2o_cmd.dataDistrib(key=key['destination_key'])
+        print "\nDistribution of {0} is {1}\n".format(key['destination_key'],json.dumps(dd['nodes'], indent=2)) 
+        return key
         
     def loadTrainData(self):
-        df = h2o.find_dataset('bench/covtype/h2o/' + 'train.csv')
-        trainKey = h2o_cmd.parseFile(csvPathname=df, key2='train.csv' + ".hex", header=1, timeoutSecs=180)
-        return trainKey
+        return self.loadAndParse(trainDS)
     
     def loadScoreData(self):
-        df = h2o.find_dataset('bench/covtype/h2o/' +'test.csv')
-        scoreKey = h2o_cmd.parseFile(csvPathname=df, key2='test.csv' + ".hex", header=1, timeoutSecs=180)
-        return scoreKey 
+        return self.loadAndParse(scoreDS)
 
     def test_RF(self):
         trainKey = self.loadTrainData()
         scoreKey = self.loadScoreData()
+        #time.sleep(3600)
         kwargs   = paramsTrainRF.copy()
         trainResultNormal = h2o_rf.trainRF(trainKey, model_key="rfm_normal", **kwargs)
+        #print h2o_rf.pp_rf_result(trainResultNormal)
         kwargs   = paramsScoreRF.copy()
         scoreResultNormal = h2o_rf.scoreRF(scoreKey, trainResultNormal, **kwargs)
         
         kwargs   = paramsTrainRF.copy()
         trainResultRefined = h2o_rf.trainRF(trainKey, refine=1, model_key="rfm_refined", **kwargs)
+        #print h2o_rf.pp_rf_result(trainResultRefined)
         kwargs   = paramsScoreRF.copy()
         scoreResultRefined = h2o_rf.scoreRF(scoreKey, trainResultRefined, **kwargs)
         print "\nScoring normal forest\n========={0}".format(h2o_rf.pp_rf_result(scoreResultNormal))
         print "\nScoring refined forest\n========={0}".format(h2o_rf.pp_rf_result(scoreResultRefined))
+
+        time.sleep(3600)
 
 if __name__ == '__main__':
     h2o.unit_main()

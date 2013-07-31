@@ -210,7 +210,7 @@ public class ConfusionTask extends MRTask {
    * */
   public void map(Key chunkKey) {
     AutoBuffer cdata      = _data.getChunk(chunkKey);
-    System.out.println("Computing CM on: " + chunkKey);
+    //System.out.println("Computing CM on: " + chunkKey);
     final int nchk       = (int) ValueArray.getChunkIndex(chunkKey);
     final int rows       = _data.rpc(nchk);
     final int cmin       = (int) _data._cols[_classcol]._min;

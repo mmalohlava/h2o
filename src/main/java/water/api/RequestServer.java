@@ -66,6 +66,7 @@ public class RequestServer extends NanoHTTPD {
     //Request.addToNavbar(registerRequest(new Plot()),        "Basic",         "Plot");
     registerRequest(new Plot());
 
+    Request.addToNavbar(registerRequest(new DataDistrib()), "Data Distrib.", "Admin");
     Request.addToNavbar(registerRequest(new Jobs()),        "Jobs",          "Admin");
     Request.addToNavbar(registerRequest(new Cloud()),       "Cluster Status","Admin");
     Request.addToNavbar(registerRequest(new IOStatus()),    "Cluster I/O",   "Admin");
@@ -82,8 +83,8 @@ public class RequestServer extends NanoHTTPD {
 
     // internal handlers
     //registerRequest(new StaticHTMLPage("/h2o/CoefficientChart.html","chart"));
-    registerRequest(new DownloadDataset());
     registerRequest(new Cancel());
+    registerRequest(new DownloadDataset());
     registerRequest(new Exec());
     registerRequest(new ExportS3Progress());
     registerRequest(new GLMGridProgress());

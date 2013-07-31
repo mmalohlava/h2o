@@ -6,10 +6,12 @@ import hex.rf.Statistic.Split;
 import java.util.Arrays;
 import java.util.Stack;
 
+import jsr166y.CountedCompleter;
+
 import water.*;
 import water.util.Log;
-import water.util.Utils;
-
+import static hex.rf.MergeTreesOp.asLeaf;
+import static hex.rf.MergeTreesOp.mergeNodes;
 
 public class RefinedTree extends Tree {
 
@@ -17,11 +19,13 @@ public class RefinedTree extends Tree {
   final AutoBuffer _serialTree;
   final int _treeProducerIdx;
   final int _treeIdx; // tree idx in producer forest
+  final TRunnable _afterAction;
 
-  public RefinedTree(Job job, Key origTreeKey, AutoBuffer serialTree, int treeProducerIdx, int treeIdx, int treeId, long seed, Data data, int maxDepth, StatType stat, int numSplitFeatures,
+  public RefinedTree(TRunnable<RefinedTree> afterAction, Job job, Key origTreeKey, AutoBuffer serialTree, int treeProducerIdx, int treeIdx, int treeId, long seed, Data data, int maxDepth, StatType stat, int numSplitFeatures,
       int exclusiveSplitLimit, Sampling sampler, int verbose, int nodesize) {
     super(job, data, maxDepth, stat, numSplitFeatures, seed, treeId, exclusiveSplitLimit, sampler, verbose, nodesize);
     assert treeIdx == treeId : "Refined treeId and treeId do not match!";
+    _afterAction = afterAction;
     _origTreeKey = origTreeKey; // tree of key being refined
     _serialTree = serialTree;
     _treeProducerIdx = treeProducerIdx;
@@ -30,24 +34,21 @@ public class RefinedTree extends Tree {
 
   @Override public void compute2() {
     if (!_job.cancelled()) {
-      Log.debug("Refining tree: " + _treeId);
+      Log.info("Refining tree: " + _treeId + " from node: " + _treeProducerIdx + " on node: " + H2O.SELF.index());
       Timer timer = new Timer();
       _stats[0]   = new ThreadLocal<Statistic>();
       _stats[1]   = new ThreadLocal<Statistic>();
       Data      d = _sampler.sample(_data, _seed);
       // Recostructing tree in memory
       _tree = extractTree(_serialTree);
-      // -------
 //      System.err.println(dumpTree("Tree after load:\n"));
-      // -------
-
       refine(d, null, _tree, 0);
-      Log.info("Tree id: " +_treeId + " refinement took: " + timer);
-      // -------
+      Log.info("Tree id: " +_treeId + " from: " + _treeProducerIdx + "refinement took: " + timer);
 //      System.err.println(dumpTree("Tree after refine:\n"));
-      // -------
 
-      updateRefinedTreeMatrix(_job.dest(), toKey(), _treeIdx, _treeProducerIdx);
+      updateKey(_origTreeKey, serialize());
+//      if (_afterAction!=null)
+//        _afterAction.run(this);
     }
     tryComplete();
   }
@@ -71,28 +72,38 @@ public class RefinedTree extends Tree {
   }
 
   void refine(Data d, SplitNode parent, INode tree, int depth) {
-    if (tree.isLeaf()) {
+    if (tree.isLeaf() && parent!=null) { // refine only non-trivial tree
       boolean isLeft = parent._l == tree;
       // try to refine the leaf
       Statistic stats = getStatistic(isLeft?0:1, d, _seed + (isLeft?LTSS_INIT:RTSS_INIT), _exclusiveSplitLimit);
       for (Row r : d) stats.addQ(r);
       stats.applyClassWeights();
       Split split = stats.split(d, false);
-      INode newNode = null;
+      INode newNode;
       if (! split.isLeafNode()) {
-        newNode = new FJBuild(split, d, depth, _seed).compute();
-//        Log.info("Leaf node refined!");
+        // -- Possible strategies:
+        // 1. replace node by a refined subtree
+        // 2. replace node by a refined subtree but merge histogram
+        // ---
+        // replace the leaf by a new subtree, but merge its leaves with original leaf
+        // to preserve leaf histogram
+    	  INode subtree = new FJBuild(split, d, depth, _seed).compute();
+        newNode = subtree; //mergeNodes(subtree, asLeaf(tree));
+        //newNode = refineNonLeafSplit(split, d, depth, asLeaf(tree));
       } else {
+        // -- Possible strategies
+        // 1. replace old leaf by a new leaf
+        // 2. merge old and new leaf
+        // --
         // do nothing  but just check if we obtain the same split class
-        byte[] histo = d.histogram();
-        // Check the difference
-        /*int oldPred = Utils.maxIndex(((LeafNode)tree)._classHisto);
-        int newPred = Utils.maxIndex(histo);
-        if (oldPred!=newPred && ((LeafNode)tree)._rows > d.rows() ) Log.warn("Leaf refinement stop at leaf but predict different class! " + oldPred+"!="+newPred);*/
-        newNode = new LeafNode(histo, d.rows()); // OR use = tree
+    	  byte[] histo = d.histogram();
+        LeafNode expLeaf = new LeafNode(histo, d.rows()); // expected leaf
+        byte[] newHisto = MergeTreesOp.mergeHisto((LeafNode) tree, expLeaf); // merge histograms
+        newNode = new LeafNode(newHisto, ((LeafNode) tree)._rows+expLeaf._rows);
+        //newNode = refineLeafSplit(split, d, depth, asLeaf(tree));
       }
       if (isLeft) parent._l = newNode; else parent._r = newNode;
-    } else { // It is a split node
+    } else if (!tree.isLeaf()) { // It is a split node
       SplitNode sn = (SplitNode) tree;
       // split data into L/R parts and recall split on the L/R nodes
       Data[] lrData = new Data[2];
@@ -100,6 +111,17 @@ public class RefinedTree extends Tree {
       if (lrData[0].rows() > 0) refine(lrData[0], sn, sn._l, depth+1);
       if (lrData[1].rows() > 0) refine(lrData[1], sn, sn._r, depth+1);
     }
+  }
+
+  INode refineNonLeafSplit(Split split, Data data, int depth, LeafNode leaf) {
+    INode subtree = new FJBuild(split, data, depth, _seed).compute();
+    return mergeNodes(subtree, leaf);
+  }
+  INode refineLeafSplit(Split split, Data data, int depth, LeafNode leaf) {
+    byte[] histo = data.histogram();
+    LeafNode expLeaf = new LeafNode(histo, data.rows()); // expected leaf
+    byte[] newHisto = MergeTreesOp.mergeHisto(leaf, expLeaf); // merge histograms
+    return new LeafNode(newHisto, leaf._rows+expLeaf._rows);
   }
   static INode extractTree(AutoBuffer sTree) {
     TreeExtractor te = new TreeExtractor(sTree);
@@ -142,5 +164,21 @@ public class RefinedTree extends Tree {
     MERGE,
     MERGE_AND_APPEND,
   }
+
+  public static interface TRunnable<T> {
+      void run(T t);
+  }
+
+  public static final TRunnable<RefinedTree> UPDATE_KEY_ACTION = new TRunnable<RefinedTree>() {
+    @Override public void run(RefinedTree t) {
+      updateKey(t._origTreeKey, t.serialize());
+    }
+  };
+
+  public static final TRunnable<RefinedTree> UPDATE_RTM = new TRunnable<RefinedTree>() {
+    @Override public void run(RefinedTree t) {
+      updateRefinedTreeMatrix(t._job.dest(), t.toKey(), t._treeIdx, t._treeProducerIdx);
+    }
+  };
 }
 
