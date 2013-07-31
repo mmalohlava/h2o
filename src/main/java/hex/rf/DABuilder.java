@@ -78,7 +78,6 @@ class DABuilder {
     ArrayList<RecursiveAction> dataInhaleJobs = new ArrayList<RecursiveAction>();
     int start_row = 0;
     for( final Key k : keys ) {    // now read the values
-      System.err.println("loading: " + k);
       final int S = start_row;
       if (!k.home()) continue;     // This is not necessary, but for sure skip no local keys (we only inhale local data)
       final int rows = ary.rpc(ValueArray.getChunkIndex(k));
