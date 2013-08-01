@@ -70,6 +70,7 @@ public abstract class UDP {
   // ---
   private static final Unsafe _unsafe = UtilUnsafe.getUnsafe();
   private static final long _Bbase  = _unsafe.arrayBaseOffset(byte[].class);
+  public static byte   get1 ( byte[] buf, int off ) { return _unsafe.getByte  (buf, _Bbase+off); }
   public static int    get2 ( byte[] buf, int off ) { return _unsafe.getShort (buf, _Bbase+off); }
   public static int    get4 ( byte[] buf, int off ) { return _unsafe.getInt   (buf, _Bbase+off); }
   public static long   get8 ( byte[] buf, int off ) { return _unsafe.getLong  (buf, _Bbase+off); }

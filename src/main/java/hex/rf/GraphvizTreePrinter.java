@@ -92,10 +92,10 @@ public class GraphvizTreePrinter extends TreePrinter {
           _dest.append(x);
           return this;
         }
-        @Override protected Tree.TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) throws IOException {
+        @Override protected Tree.TreeVisitor pre (int col, float fcmp, byte producerIdx, int off0, int offl, int offr ) throws IOException {
           byte b = (byte) _ts.get1(off0);
-          _dest.append(String.format("%d [label=\"%s %s %f\"];\n",
-                                     off0, _cols[col]._name, ((b=='E')?"==":"<="), fcmp));
+          _dest.append(String.format("%d [label=\"%s %s %f (by %d)\"];\n",
+                                     off0, _cols[col]._name, ((b=='E')?"==":"<="), fcmp, producerIdx));
           _dest.append(String.format("%d -> %d;\n", off0, offl));
           _dest.append(String.format("%d -> %d;\n", off0, offr));
           return this;

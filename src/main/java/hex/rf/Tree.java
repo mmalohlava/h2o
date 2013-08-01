@@ -40,6 +40,8 @@ public class Tree extends H2OCountedCompleter {
   final int      _nodesize;     // Minimal nodesize to decide about node to become a leaf (stop splitting if we get down to this number of records)
   final int      _exclusiveSplitLimit;
   final int      _verbose;
+  final byte     _round;        // tree creation round
+  final byte     _producerIdx;  // node idx producing the tree
   INode          _tree;         // Root of decision tree
   ThreadLocal<Statistic>[] _stats  = new ThreadLocal[2];
   Key            _thisTreeKey;
@@ -47,7 +49,7 @@ public class Tree extends H2OCountedCompleter {
   /**
    * Constructor used to define the specs when building the tree from the top.
    */
-  public Tree(final Job job, final Data data, int maxDepth, StatType stat, int numSplitFeatures, long seed, int treeId, int exclusiveSplitLimit, final Sampling sampler, int verbose, int nodesize) {
+  public Tree(final Job job, final Data data, byte round, byte producerIdx, int maxDepth, StatType stat, int numSplitFeatures, long seed, int treeId, int exclusiveSplitLimit, final Sampling sampler, int verbose, int nodesize) {
     _job              = job;
     _data             = data;
     _type             = stat;
@@ -59,6 +61,9 @@ public class Tree extends H2OCountedCompleter {
     _exclusiveSplitLimit = exclusiveSplitLimit;
     _verbose          = verbose;
     _nodesize         = nodesize;
+    _round            = round;
+    _producerIdx      = producerIdx;
+
   }
 
   protected Statistic getStatistic(int index, Data data, long seed, int exclusiveSplitLimit) {
@@ -163,8 +168,8 @@ public class Tree extends H2OCountedCompleter {
       int c = _split._column, s = _split._split;
       assert c != _data.columns()-1; // Last column is the class column
       SplitNode nd = _split.isExclusion() ?
-        new ExclusionNode(c, s, _data.colName(c), _data.unmap(c,s)) :
-        new SplitNode    (c, s, _data.colName(c), _data.unmap(c,s));
+        new ExclusionNode(c, s, _data.colName(c), _data.unmap(c,s), (byte) H2O.SELF.index()) :
+        new SplitNode    (c, s, _data.colName(c), _data.unmap(c,s), (byte) H2O.SELF.index());
       _data.filter(nd,res,left,rite);
       FJBuild fj0 = null, fj1 = null;
       Statistic.Split ls = left.split(res[0], _depth >= _maxDepth || res[0].rows() <= _nodesize); // get the splits
@@ -244,12 +249,14 @@ public class Tree extends H2OCountedCompleter {
     int _depth, _leaves, _size;
     String _name;
     float _originalSplit;
+    final byte _producer;
 
-    public SplitNode(int column, int split, String columnName, float originalSplit) {
+    public SplitNode(int column, int split, String columnName, float originalSplit, byte producer) {
       _name = columnName;
       _column = column;
       _split = split;
       _originalSplit = originalSplit;
+      _producer = producer;
     }
 
     static class SplitInfo implements Comparable<SplitInfo> {
@@ -308,6 +315,7 @@ public class Tree extends H2OCountedCompleter {
 
     @Override void write( AutoBuffer bs ) {
       bs.put1('S');             // Node indicator
+      bs.put1(_producer);       // Put producer
       assert Short.MIN_VALUE <= _column && _column < Short.MAX_VALUE;
       bs.put2((short) _column);
       bs.put4f(split_value());
@@ -318,8 +326,8 @@ public class Tree extends H2OCountedCompleter {
       _r.write(bs);
     }
     @Override public int size_impl( ) {
-      // Size is: 1 byte indicator, 2 bytes col, 4 bytes val, the skip, then left, right
-      return _size=(1+2+4+(( _l.size() <= 254 ) ? 1 : 4)+_l.size()+_r.size());
+      // Size is: 1 byte indicator, 1byte for producer, 2 bytes col, 4 bytes val, the skip, then left, right
+      return _size=(1+1+2+4+(( _l.size() <= 254 ) ? 1 : 4)+_l.size()+_r.size());
     }
     public boolean isIn(final Row row) {  return row.getEncodedColumnValue(_column) <= _split; }
     public final boolean canDecideAbout(final Row row) { return row.hasValidValue(_column); }
@@ -328,7 +336,7 @@ public class Tree extends H2OCountedCompleter {
   /** Node that classifies one column category to the left and the others to the right. */
   static class ExclusionNode extends SplitNode {
 
-    public ExclusionNode(int column, int val, String cname, float origSplit) { super(column,val,cname,origSplit);  }
+    public ExclusionNode(int column, int val, String cname, float origSplit, byte producer) { super(column,val,cname,origSplit, producer);  }
 
     @Override public void print(TreePrinter p) throws IOException { p.printNode(this); }
     @Override public String toString() { return "E "+_column +"==" + _split + " ("+_l+","+_r+")"; }
@@ -342,11 +350,12 @@ public class Tree extends H2OCountedCompleter {
     }
     public int size_impl( ) {
       // Size is: 1 byte indicator, 2 bytes col, 4 bytes val, the skip, then left, right
-      return _size=(1+2+4+(( _l.size() <= 254 ) ? 1 : 4)+_l.size()+_r.size());
+      return _size=(1+1+2+4+(( _l.size() <= 254 ) ? 1 : 4)+_l.size()+_r.size());
     }
 
     @Override void write( AutoBuffer bs ) {
       bs.put1('E');             // Node indicator
+      bs.put1(_producer);       // Put producer
       assert Short.MIN_VALUE <= _column && _column < Short.MAX_VALUE;
       bs.put2((short)_column);
       bs.put4f(split_value());
@@ -369,14 +378,18 @@ public class Tree extends H2OCountedCompleter {
     bs.put4(_treeId);
     bs.put8(_seed);
     bs.put2((char)_data.classes());
+    bs.put1(_round);
+    bs.put1(_producerIdx);
     _tree.write(bs);
     return bs;
   }
-  protected static final AutoBuffer serialize(int dataId, long seed, int classes, INode tree) {
+  protected static final AutoBuffer serialize(int dataId, long seed, int classes, byte round, byte producer, INode tree) {
     AutoBuffer bs = new AutoBuffer();
     bs.put4(dataId);
     bs.put8(seed);
     bs.put2((char) classes);
+    bs.put1(round);
+    bs.put1(producer);
     tree.write(bs);
     return bs;
   }
@@ -395,6 +408,8 @@ public class Tree extends H2OCountedCompleter {
     ts.get4();    // Skip tree-id
     ts.get8();    // Skip seed
     int classes = ts.get2(); // Number of classes to reconstruct leaf histogram correctly
+    ts.get1();    // Skip round
+    ts.get1();    // Skip producer ID
     AutoBuffer traversedTs = traverse(ts, ary, databits, row, modelDataMap);
     if (traversedTs==null) return null;
     else {
@@ -414,6 +429,8 @@ public class Tree extends H2OCountedCompleter {
     ts.get4();    // Skip tree-id
     ts.get8();    // Skip seed
     int classes = ts.get2(); // Number of classes to reconstruct leaf histogram correctly
+    ts.get1();    // Skip round
+    ts.get1();    // Skip producer ID
     AutoBuffer traversedTs = traverse(ts, ary, databits, row, modelDataMap);
     if (traversedTs==null) return badData;
     else return findMajorityIdx(traversedTs, classes);
@@ -424,6 +441,7 @@ public class Tree extends H2OCountedCompleter {
 
     while( (b = (byte) ts.get1()) != '[' ) { // While not a leaf indicator
       assert b == '(' || b == 'S' || b == 'E';
+      ts.get1(); // skip producer index
       int col = modelDataMap[ts.get2()]; // Column number in model-space mapped to data-space
       float fcmp = ts.get4f();  // Float to compare against
       if( ary.isNA(databits, row, col) ) return null;
@@ -457,11 +475,13 @@ public class Tree extends H2OCountedCompleter {
     ts.get4();    // Skip tree-id
     ts.get8();    // Skip seed
     int classes = ts.get2();
+    ts.get1();    // Skip round
+    ts.get1();    // Skip producer ID
 
     byte b;
-
     while( (b = (byte) ts.get1()) != '[' ) { // While not a leaf indicator
       assert b == '(' || b == 'S' || b == 'E';
+      ts.get1(); // skip producer index
       int col = ts.get2(); // Column number in model-space
       float fcmp = ts.get4f();  // Float to compare against
       if( Double.isNaN(ds[col]) ) return badat;
@@ -485,16 +505,18 @@ public class Tree extends H2OCountedCompleter {
     return sb.toString();
   }
 
-  public static int treeId( byte[] bits) { return UDP.get4(bits, 0); }
-  public static long seed ( byte[] bits) { return UDP.get8(bits, 4); }
-  public static int classes( byte[] bits) { return UDP.get2(bits, 4+8); }
+  public static int  treeId   ( byte[] bits) { return UDP.get4(bits, 0); }
+  public static long seed     ( byte[] bits) { return UDP.get8(bits, 4); }
+  public static int  classes  ( byte[] bits) { return UDP.get2(bits, 4+8); }
+  public static byte round    ( byte[] bits) { return UDP.get1(bits, 4+8+2); }
+  public static byte producer ( byte[] bits) { return UDP.get1(bits, 4+8+2+1); }
 
   /** Abstract visitor class for serialized trees.*/
   public static abstract class TreeVisitor<T extends Exception> {
     protected TreeVisitor<T> leaf( int aRows, byte[] tclass ) throws T { return this; }
-    protected TreeVisitor<T>  pre( int col, float fcmp, int off0, int offl, int offr ) throws T { return this; }
-    protected TreeVisitor<T>  mid( int col, float fcmp ) throws T { return this; }
-    protected TreeVisitor<T> post( int col, float fcmp ) throws T { return this; }
+    protected TreeVisitor<T>  pre( int col, float fcmp, byte producerIdx, int off0, int offl, int offr ) throws T { return this; }
+    protected TreeVisitor<T>  mid( int col, float fcmp, byte producerIdx) throws T { return this; }
+    protected TreeVisitor<T> post( int col, float fcmp, byte producerIdx) throws T { return this; }
     long  result( ) { return 0; }
     protected final AutoBuffer _ts;
     protected final int        _classes;
@@ -504,6 +526,8 @@ public class Tree extends H2OCountedCompleter {
       _ts.get4();               // Skip tree ID
       _ts.get8();               // Skip seed
       _classes = _ts.get2();    // Skip number of classes
+      _ts.get1();               // Skip round
+      _ts.get1();               // Skip producer ID
       _histo   = new byte[_classes];
     }
 
@@ -516,13 +540,14 @@ public class Tree extends H2OCountedCompleter {
       }
       assert b == '(' || b == 'S' || b =='E' : b;
       int off0 = _ts.position()-1;    // Offset to start of *this* node
+      byte producerIdx = (byte) _ts.get1();
       int col = _ts.get2();     // Column number
       float fcmp = _ts.get4f(); // Float to compare against
       int skip = (_ts.get1()&0xFF);
       if( skip == 0 ) skip = _ts.get3();
       int offl = _ts.position();      // Offset to start of *left* node
       int offr = _ts.position()+skip; // Offset to start of *right* node
-      return pre(col,fcmp,off0,offl,offr).visit().mid(col,fcmp).visit().post(col,fcmp);
+      return pre(col,fcmp,producerIdx,off0,offl,offr).visit().mid(col,fcmp, producerIdx).visit().post(col,fcmp,producerIdx);
     }
   }
 
@@ -531,8 +556,8 @@ public class Tree extends H2OCountedCompleter {
     return new TreeVisitor<RuntimeException>(tbits) {
       int _maxdepth, _depth, _leaves;
       @Override protected TreeVisitor leaf(int aRows, byte[] tclass ) { _leaves++; if( _depth > _maxdepth ) _maxdepth = _depth; return this; }
-      @Override protected TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) { _depth++; return this; }
-      @Override protected TreeVisitor post(int col, float fcmp ) { _depth--; return this; }
+      @Override protected TreeVisitor pre (int col, float fcmp, byte producerIdx, int off0, int offl, int offr ) { _depth++; return this; }
+      @Override protected TreeVisitor post(int col, float fcmp, byte producerIdx ) { _depth--; return this; }
       @Override long result( ) {return ((long)_maxdepth<<32) | _leaves; }
     }.visit().result();
   }

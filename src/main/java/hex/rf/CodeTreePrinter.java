@@ -86,16 +86,16 @@ public class CodeTreePrinter extends TreePrinter {
           _dest.append(x);
           return this;
         }
-        @Override protected Tree.TreeVisitor pre (int col, float fcmp, int off0, int offl, int offr ) throws IOException {
+        @Override protected Tree.TreeVisitor pre (int col, float fcmp, byte producerIdx, int off0, int offl, int offr ) throws IOException {
           byte b = (byte) _ts.get1(off0);
           _dest.append(String.format("if( fs[%s] %s %f ) \n",colNameConstant(col),((b=='E')?"==":"<="), fcmp)).incrementIndent();
           return this;
         }
-        @Override protected Tree.TreeVisitor mid (int col, float fcmp ) throws IOException {
+        @Override protected Tree.TreeVisitor mid (int col, float fcmp, byte producerIdx ) throws IOException {
           _dest.decrementIndent().append("else\n").incrementIndent();
           return this;
         }
-        @Override protected Tree.TreeVisitor post(int col, float fcmp ) throws IOException {
+        @Override protected Tree.TreeVisitor post(int col, float fcmp, byte producerIdx ) throws IOException {
           _dest.decrementIndent();
           return this;
         }

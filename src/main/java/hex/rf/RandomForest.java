@@ -3,7 +3,6 @@ package hex.rf;
 import hex.rf.ConfusionTask.CMFinal;
 import hex.rf.DRF.DRFJob;
 import hex.rf.DRF.DRFParams;
-import hex.rf.RefinedTree.*;
 import hex.rf.Tree.StatType;
 import hex.rng.H2ORandomRNG.RNGKind;
 
@@ -45,7 +44,7 @@ public class RandomForest {
     Sampling sampler = createSampler(drfParams);
     for (int i = 0; i < ntrees; ++i) {
       long treeSeed = rnd.nextLong() + TREE_SEED_INIT; // make sure that enough bits is initialized
-      trees[i] = new Tree(job, data, drfParams._depth, drfParams._stat, numSplitFeatures, treeSeed,
+      trees[i] = new Tree(job, data, (byte)1, (byte) H2O.SELF.index(), drfParams._depth, drfParams._stat, numSplitFeatures, treeSeed,
                           i, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize);
       if (!drfParams._parallel) ForkJoinTask.invokeAll(new Tree[]{trees[i]});
     }
@@ -66,28 +65,40 @@ public class RandomForest {
     Sampling sampler = createSampler(drfParams);
     int indx = 0;
     LinkedList<RefinedTree> ops = new LinkedList<RefinedTree>();
-    LinkedList<RefinedTree> lops = new LinkedList<RefinedTree>();
     int cnt = 0;
     int totalTrees = m._totalTrees - ntrees;
-    while (cnt < totalTrees + ntrees) {
+    int rounds = 2;
+    while (cnt < rounds*totalTrees + (rounds-1)*ntrees) { // end after refining all trees from other nodes and my trees from first pass
       ops.clear();
-      lops.clear();
       m = UKV.get(job.dest()); // get RF model view
       Key[] selfRQueue = m._refineQueues[selfNIdx];
       for(int i=indx; i<selfRQueue.length; i++, indx++) {
         Key treeToRefine = selfRQueue[i];
+        byte[] serialTree = DKV.get(treeToRefine).memOrLoad();
+        long seed  = Tree.seed(serialTree);
+        int treeId = Tree.treeId(serialTree);
+        byte round = Tree.round(serialTree);
+        byte producer = Tree.producer(serialTree);
         if (!m.isTreeFromNode(treeToRefine, selfNIdx)) { // it is not my own tree comming back after going around the cloud
-          byte[] serialTree = DKV.get(treeToRefine).memOrLoad();
-          long seed  = Tree.seed(serialTree);
-          int treeId = Tree.treeId(serialTree);
-          ops.add(new RefinedTree(RefinedTree.UPDATE_KEY_ACTION, job,treeToRefine, new AutoBuffer(serialTree), -1, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+          // we need to preserve round
+          switch (round) {
+            case 1: // refine tree totally only the first round
+              ops.add(new RefinedTree(RefinedTree.UPDATE_KEY_ACTION, job, round, treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+              break;
+            default: // update (by merge) histogram in leaves
+              ops.add(new RefinedTree3(RefinedTree.UPDATE_KEY_ACTION, job, round, treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+              break;
+          }
           cnt++;
-        } else { // it is a local node
-          byte[] serialTree = DKV.get(treeToRefine).memOrLoad();
-          long seed  = Tree.seed(serialTree);
-          int treeId = Tree.treeId(serialTree);
-          lops.add(new RefinedTree2(RefinedTree.UPDATE_KEY_ACTION, job,treeToRefine, new AutoBuffer(serialTree), -1, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
-          cnt++;
+        } else { // it is a tree from this node after round-trip around the cloud
+          // perform leaf update from scratch
+          switch (round) {
+            case 1: ops.add(new RefinedTree2(RefinedTree.UPDATE_KEY_ACTION, job, (byte) (round+1), treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+            cnt++; break;
+            case 2: ops.add(new RefinedTree2(RefinedTree.UPDATE_KEY_ACTION, job, (byte) (round+1), treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+            cnt++; break;
+            default: /* do nothing since it made two-passes around the cloud */
+          }
         }
       }
       if (!ops.isEmpty()) {
@@ -96,9 +107,6 @@ public class RandomForest {
         Key keys[] = new Key[ops.size()];
         for(int i=0;i<ops.size();i++) keys[i] = ops.get(i)._origTreeKey;
         sendToNextNode(job, keys);
-      } else if (!lops.isEmpty()) {
-        ForkJoinTask.invokeAll(lops); // refine tree
-        DKV.write_barrier();
       } else { // or wait little bit for rest of nodes
         try { Thread.sleep(500); } catch (InterruptedException _) {};
       }
@@ -139,7 +147,8 @@ public class RandomForest {
             byte[] serialTree = DKV.get(tKey).memOrLoad();
             long seed = Tree.seed(serialTree);
             int treeId = Tree.treeId(serialTree);
-            trees.add(new RefinedTree(RefinedTree.UPDATE_RTM, job, tKey, new AutoBuffer(serialTree), i, j, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+            byte round = Tree.round(serialTree);
+            trees.add(new RefinedTree(RefinedTree.UPDATE_RTM, job, round, tKey, new AutoBuffer(serialTree), (byte) i, j, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
             idx++;
           }
         }

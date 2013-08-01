@@ -19,11 +19,12 @@ public class MergeTreesOp extends H2OCountedCompleter {
     assert Tree.treeId(mtb) == Tree.treeId(rtb);
     assert Tree.seed(mtb)   == Tree.seed(rtb);
     assert Tree.classes(mtb) == Tree.classes(rtb);
+    assert Tree.round(mtb) == Tree.round(rtb);
     INode mt = RefinedTree.extractTree(new AutoBuffer(mtb));
     INode rt = RefinedTree.extractTree(new AutoBuffer(rtb));
     merge(mt, null, rt, null);
     // FIXME now we should decide if merge tree is better or not
-    byte[] mtab = RefinedTree.serialize(Tree.treeId(mtb), Tree.seed(mtb), Tree.classes(mtb), mt).buf();
+    byte[] mtab = RefinedTree.serialize(Tree.treeId(mtb), Tree.seed(mtb), Tree.classes(mtb), Tree.round(mtb), (byte)-1, mt).buf();
     updateTKey(_masterTree, mtab);
 //    appendTree(_rfModel, mtab);
     tryComplete();
