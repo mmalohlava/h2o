@@ -10,6 +10,7 @@ import jsr166y.CountedCompleter;
 
 import water.*;
 import water.util.Log;
+import water.util.Utils;
 import static hex.rf.MergeTreesOp.asLeaf;
 import static hex.rf.MergeTreesOp.mergeNodes;
 
@@ -58,23 +59,12 @@ public class RefinedTree extends Tree {
       Statistic stats = getStatistic(isLeft?0:1, d, _seed + (isLeft?LTSS_INIT:RTSS_INIT), _exclusiveSplitLimit);
       for (Row r : d) stats.addQ(r);
       stats.applyClassWeights();
-      Split split = stats.split(d, false);
+      Split split = stats.split(d, false); // FIXME - here we need to know the original data in leaf
       INode newNode;
       if (! split.isLeafNode()) {
-        assert !split.isImpossible();
-        // -- Possible strategies:
-        // 1. replace node by a refined subtree
-        // 2. replace node by a refined subtree but merge histogram
-        // ---
-        // replace the leaf by a new subtree, but merge its leaves with original leaf
-        // to preserve leaf histogram
     	  newNode = refineNonLeafSplit(split, d, depth, asLeaf(tree));
       } else {
-        // -- Possible strategies
-        // 1. replace old leaf by a new leaf
-        // 2. merge old and new leaf
-        // --
-        // do nothing  but just check if we obtain the same split class
+        assert !split.isImpossible();
         newNode = refineLeafSplit(split, d, depth, asLeaf(tree));
       }
       if (isLeft) parent._l = newNode; else parent._r = newNode;
@@ -88,15 +78,29 @@ public class RefinedTree extends Tree {
     }
   }
 
+  // -- Possible strategies:
+  // 1. replace node by a refined subtree
+  // 2. replace node by a refined subtree but merge histogram
+  // ---
+  // replace the leaf by a new subtree, but merge its leaves with original leaf
+  // to preserve leaf histogram
   INode refineNonLeafSplit(Split split, Data data, int depth, LeafNode leaf) {
+//    Log.info("Split! Observatios: " + data.rows() + "(original: " + leaf._rows + ")");
     INode subtree = new FJBuild(split, data, depth, _seed).compute();
     return mergeNodes(subtree, leaf);
+//    return leaf;
   }
+  // -- Possible strategies
+  // 1. replace old leaf by a new leaf
+  // 2. merge old and new leaf
+  // --
+  // do nothing  but just check if we obtain the same split class
   INode refineLeafSplit(Split split, Data data, int depth, LeafNode leaf) {
     byte[] histo = data.histogram();
     LeafNode expLeaf = new LeafNode(histo, data.rows()); // expected leaf
     byte[] newHisto = MergeTreesOp.mergeHisto(leaf, expLeaf); // merge histograms
     return new LeafNode(newHisto, leaf._rows+expLeaf._rows);
+//    return leaf;
   }
   static INode extractTree(AutoBuffer sTree) {
     TreeExtractor te = new TreeExtractor(sTree);

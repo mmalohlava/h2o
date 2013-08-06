@@ -63,7 +63,8 @@ class DABuilder {
     // building dataset's columns.
     final int[] modelDataMap = rfmodel.columnMapping(ary.colNames());
 
-    final DataAdapter dapt = new DataAdapter( ary, rfmodel, modelDataMap,
+    final DataAdapter dapt = new DataAdapter( ary, keys,
+                                              rfmodel, modelDataMap,
                                               getRowCount(keys),
                                               getChunkId(keys),
                                               _drf._params._seed,

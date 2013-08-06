@@ -67,7 +67,7 @@ public class RandomForest {
     LinkedList<RefinedTree> ops = new LinkedList<RefinedTree>();
     int cnt = 0;
     int totalTrees = m._totalTrees - ntrees;
-    int rounds = 2;
+    final byte rounds = 1;
     while (cnt < rounds*totalTrees + (rounds-1)*ntrees) { // end after refining all trees from other nodes and my trees from first pass
       ops.clear();
       m = UKV.get(job.dest()); // get RF model view
@@ -82,22 +82,20 @@ public class RandomForest {
         if (!m.isTreeFromNode(treeToRefine, selfNIdx)) { // it is not my own tree comming back after going around the cloud
           // we need to preserve round
           switch (round) {
-            case 1: // refine tree totally only the first round
-              ops.add(new RefinedTree(RefinedTree.UPDATE_KEY_ACTION, job, round, treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
-              break;
-            default: // update (by merge) histogram in leaves
+            case 2:
               ops.add(new RefinedTree3(RefinedTree.UPDATE_KEY_ACTION, job, round, treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
-              break;
+              cnt++; break;
+            default: // update (by merge) histogram in leaves
+              ops.add(new RefinedTreeMarkAndLogRows(RefinedTree.UPDATE_KEY_ACTION, job, round, treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+              cnt++; break;
           }
-          cnt++;
-        } else { // it is a tree from this node after round-trip around the cloud
-          // perform leaf update from scratch
+        } else {
+          // it is a tree from this node after round-trip around the cloud
+          // so increase round number if it is < rounds, else do nothing
           switch (round) {
-            case 1: ops.add(new RefinedTree2(RefinedTree.UPDATE_KEY_ACTION, job, (byte) (round+1), treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+            case rounds: break;
+            default : ops.add(new RefinedTree2(RefinedTree.UPDATE_KEY_ACTION, job, (byte) (round+1), treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
             cnt++; break;
-            case 2: ops.add(new RefinedTree2(RefinedTree.UPDATE_KEY_ACTION, job, (byte) (round+1), treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
-            cnt++; break;
-            default: /* do nothing since it made two-passes around the cloud */
           }
         }
       }

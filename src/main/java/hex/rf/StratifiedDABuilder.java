@@ -186,7 +186,7 @@ public class StratifiedDABuilder extends DABuilder {
     int totalRows = 0; // size of local DataAdapter
     for(int i = 0; i < nclasses;++i)
       totalRows += chunkHistogram[keys.length][i];
-    final DataAdapter dapt = new DataAdapter(ary, _drf._rfmodel, modelDataMap,
+    final DataAdapter dapt = new DataAdapter(ary, keys, _drf._rfmodel, modelDataMap,
                                             totalRows,
                                             ValueArray.getChunkIndex(keys[0]),
                                             _drf._params._seed,

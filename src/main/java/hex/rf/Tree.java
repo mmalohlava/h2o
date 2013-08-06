@@ -239,6 +239,7 @@ public class Tree extends H2OCountedCompleter {
         bs.put1(_classHisto[i]);
     }
     @Override int size_impl( ) { return 1+4+_classHisto.length; } // 1+# of classes bytes in serialized form
+    public byte[] histogram() { return _classHisto; }
   }
 
   /** Gini classifier node. */

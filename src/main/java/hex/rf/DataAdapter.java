@@ -2,8 +2,7 @@ package hex.rf;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 
-import water.MemoryManager;
-import water.ValueArray;
+import water.*;
 import water.util.*;
 import water.util.Log.Tag.Sys;
 
@@ -35,7 +34,10 @@ final class DataAdapter  {
   /** Number of ignored columns */
   private int            _ignoredColumns;
 
-  DataAdapter(ValueArray ary, RFModel model, int[] modelDataMap, int rows,
+  public final ValueArray _ary;
+  public final Key[]      _homeKeys;
+
+  DataAdapter(ValueArray ary, Key[] homeKeys, RFModel model, int[] modelDataMap, int rows,
               long unique, long seed, int binLimit, double[] classWt) {
     assert model._dataKey == ary._key;
     _seed       = seed+(unique<<16); // This is important to preserve sampling selection!!!
@@ -43,6 +45,8 @@ final class DataAdapter  {
     _dataId     = unique;
     _numRows    = rows;
     _numClasses = model.classes();
+    _ary        = ary;
+    _homeKeys   = homeKeys;
 
     _c = new Col[model._va._cols.length];
     for( int i = 0; i < _c.length; i++ ) {
