@@ -29,8 +29,8 @@ public class StoreView extends Request {
       if( filter != null && // Have a filter?
           key.toString().indexOf(filter) == -1 )
         continue; // Ignore this filtered-out key
-      if( !key.user_allowed() ) // Also filter out for user-keys
-        continue;
+//      if( !key.user_allowed() ) // Also filter out for user-keys
+//        continue;
       if( H2O.get(key) == null ) continue; // Ignore misses
       keys[len++] = key; // Capture the key
       if( len == keys.length ) {
