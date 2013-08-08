@@ -1,6 +1,7 @@
 package hex.rf;
 
 import hex.rf.DRF.DRFTask;
+import hex.rf.RefinedTreeMarkAndLogRows.ChunksRowsFilter;
 
 import java.util.ArrayList;
 
@@ -11,6 +12,8 @@ import water.util.*;
 import water.util.Log.Tag.Sys;
 
 class DABuilder {
+
+  static final int[] NO_ROW_FILTER = new int[] {} ;
 
   protected final DRFTask _drf;
 
@@ -26,7 +29,8 @@ class DABuilder {
 
   DABuilder(final DRFTask drf) { _drf = drf;  }
 
-  final DataAdapter build(Key [] keys) { return inhaleData(keys); }
+  final DataAdapter build(Key [] keys)                { return inhaleData(keys, new ChunksRowsFilter[] {} ); }
+  final DataAdapter build(Key [] keys, ChunksRowsFilter[] filters) { return inhaleData(keys, filters); }
 
   /** Check that we have proper number of valid columns vs. features selected, if not cap*/
   private final void checkAndLimitFeatureUsedPerSplit(final DataAdapter dapt) {
@@ -39,10 +43,12 @@ class DABuilder {
   }
 
   /** Return the number of rows on this node. */
-  private final int getRowCount(final Key[] keys) {
+  private final int getRowCount(Key[] keys, ChunksRowsFilter[] filters) {
     int num_rows = 0;    // One pass over all chunks to compute max rows
     ValueArray ary = DKV.get(_drf._rfmodel._dataKey).get();
     for( Key key : keys ) if( key.home() ) num_rows += ary.rpc(ValueArray.getChunkIndex(key));
+    for( ChunksRowsFilter f: filters)
+      for (int[] r : f._rows) num_rows += r.length;
     return num_rows;
   }
 
@@ -53,7 +59,7 @@ class DABuilder {
   }
 
   /** Build data adapter for given array */
-  protected  DataAdapter inhaleData(Key [] keys) {
+  protected  DataAdapter inhaleData(Key[] keys, ChunksRowsFilter[] filters) {
     Timer t_inhale = new Timer();
     RFModel rfmodel = _drf._rfmodel;
     final ValueArray ary = DKV.get(rfmodel._dataKey).get();
@@ -65,7 +71,7 @@ class DABuilder {
 
     final DataAdapter dapt = new DataAdapter( ary, keys,
                                               rfmodel, modelDataMap,
-                                              getRowCount(keys),
+                                              getRowCount(keys, filters),
                                               getChunkId(keys),
                                               _drf._params._seed,
                                               _drf._params._binLimit,
@@ -82,7 +88,7 @@ class DABuilder {
       final int S = start_row;
       if (!k.home()) continue;     // This is not necessary, but for sure skip no local keys (we only inhale local data)
       final int rows = ary.rpc(ValueArray.getChunkIndex(k));
-      dataInhaleJobs.add( loadChunkAction(dapt, ary, k, modelDataMap, ncolumns, rows, S) );
+      dataInhaleJobs.add( loadChunkAction(dapt, ary, k, modelDataMap, ncolumns, rows, S, NO_ROW_FILTER) );
       start_row += rows;
     }
     // And invoke collected jobs (load all local data)
@@ -90,32 +96,25 @@ class DABuilder {
 
     // Now local data are loaded, try to inhale more data from other nodes.
     if (_drf._params._useNonLocalData) {
-      final float OVERHEAD_MAGIC = 3/8.f;
-      long totalmem = Runtime.getRuntime().totalMemory();
-      long localChunks = keys.length * ValueArray.CHUNK_SZ;
-      long availMem = (long) (OVERHEAD_MAGIC * totalmem) - localChunks; // theoretically available memory
-
-      if (availMem > 0) {
-        // Try to fill the memory up to ratio 3/8
-        int numkeys = (int) (availMem / ValueArray.CHUNK_SZ);
-        System.err.println("TAvailM: MB " + availMem / 1024 / 1024);
-        System.err.println("Can load keys: " + numkeys);
-        ArrayList<Key> allkeys = new ArrayList<Key>(numkeys);
-        for(int i=0; i<ary.chunks(); i++) {
-          Key k = ary.getChunkKey(i);
-          if (!k.home()) allkeys.add(k);
-          if (allkeys.size() == numkeys) break;
-        }
-        for (final Key k : allkeys) {
-          System.err.println("-> reloading more keys: " + k + " from " + k.home_node());
-          final int S = start_row;
-          final int rows = ary.rpc(ValueArray.getChunkIndex(k));
-          dataInhaleJobs.add( loadChunkAction(dapt, ary, k, modelDataMap, ncolumns, rows, S) );
-          start_row += rows;
-        }
-      }
+      throw new UnsupportedOperationException("Re-load of data from other nodes is not supported in this version!");
     }
     // ----
+
+    // --- Inhale data from other nodes
+    if (true) {
+    dataInhaleJobs = new ArrayList<RecursiveAction>();
+    for( final ChunksRowsFilter filter : filters) {    // now read the values
+      for (int i=0; i<filter._chunks.length; i++) {
+        final Key k = filter._chunks[i];
+        final int S = start_row;
+        final int rowsInChunk = ary.rpc(ValueArray.getChunkIndex(k));
+        dataInhaleJobs.add( loadChunkAction(dapt, ary, k, modelDataMap, ncolumns, rowsInChunk, S, filter._rows[i]) );
+        start_row += filter._rows[i].length; // the job inhale only the filter rows
+      }
+    }
+    ForkJoinTask.invokeAll(dataInhaleJobs);
+    }
+    // ---
 
     // Shrink data
     dapt.shrink();
@@ -123,12 +122,21 @@ class DABuilder {
     return dapt;
   }
 
-  static RecursiveAction loadChunkAction(final DataAdapter dapt, final ValueArray ary, final Key k, final int[] modelDataMap, final int ncolumns, final int rows, final int S) {
+  static RecursiveAction loadChunkAction(final DataAdapter dapt, final ValueArray ary, final Key k, final int[] modelDataMap, final int ncolumns, final int rows, final int S, final int[] filterRows) {
     return new RecursiveAction() {
       @Override protected void compute() {
         AutoBuffer bits = ary.getChunk(k);
+        int fcnt = 0;
+        int rcnt = 0;
         for(int j = 0; j < rows; ++j) {
-          int rowNum = S + j; // row number in the subset of the data on the node
+          if (filterRows!=NO_ROW_FILTER) {
+            while (fcnt<filterRows.length && filterRows[fcnt] < j) fcnt++; // skip all filtered rows
+            if (fcnt == filterRows.length) break; // alread all rows inhaled
+            if (filterRows[fcnt] > j ) continue;
+            assert filterRows[fcnt] == j;
+          }
+          int rowNum = S + rcnt; // row number in the subset of the data on the node
+          rcnt++;
           boolean rowIsValid = false;
           for( int c = 0; c < ncolumns; ++c) { // For all columns being processed
             final int col = modelDataMap[c];   // Column in the dataset
@@ -144,6 +152,7 @@ class DABuilder {
           // The whole row is invalid in the following cases: all values are NaN or there is no class specified (NaN in class column)
           if (!rowIsValid) dapt.markIgnoredRow(j);
         }
+        System.err.println("Loaded " + rcnt + " rows from chunk: " + k );
       }
     };
   }

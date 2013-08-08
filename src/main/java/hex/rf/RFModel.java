@@ -107,8 +107,8 @@ public class RFModel extends Model implements Cloneable, Progress {
 
   static public RFModel make(RFModel old, Key tkey, int localTreeId, int nodeIdx) {
     RFModel m = old.clone();
-    m._tkeys = Arrays.copyOf(old._tkeys,old._tkeys.length+1);
-    m._tkeys[m._tkeys.length-1] = tkey;
+    //m._tkeys = Arrays.copyOf(old._tkeys,old._tkeys.length+1);
+    //m._tkeys[m._tkeys.length-1] = tkey;
     // updating local forests
     if (localTreeId>=0) {
       m._localForests[nodeIdx] = Arrays.copyOf(old._localForests[nodeIdx],Math.max(old._localForests[nodeIdx].length, localTreeId+1));

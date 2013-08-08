@@ -55,7 +55,7 @@ public class RandomForest {
     return trees;
   }
 
-  public static void refineByRotating(final Job job, final DRFParams drfParams, final Data data, int ntrees, int numSplitFeatures) {
+  public static void learnByRotating(final Job job, final DRFParams drfParams, final Data data, int ntrees, int numSplitFeatures) {
     final int selfNIdx = H2O.SELF.index();
     RFModel m = UKV.get(job.dest());
     final Key[] selfRF = m._localForests[selfNIdx];
@@ -67,8 +67,8 @@ public class RandomForest {
     LinkedList<RefinedTree> ops = new LinkedList<RefinedTree>();
     int cnt = 0;
     int totalTrees = m._totalTrees - ntrees;
-    final byte rounds = 1;
-    while (cnt < rounds*totalTrees + (rounds-1)*ntrees) { // end after refining all trees from other nodes and my trees from first pass
+    boolean isDone = false;
+    while (cnt < totalTrees || !isDone) { // end after refining all trees from other nodes and my trees from first pass
       ops.clear();
       m = UKV.get(job.dest()); // get RF model view
       Key[] selfRQueue = m._refineQueues[selfNIdx];
@@ -80,23 +80,10 @@ public class RandomForest {
         byte round = Tree.round(serialTree);
         byte producer = Tree.producer(serialTree);
         if (!m.isTreeFromNode(treeToRefine, selfNIdx)) { // it is not my own tree comming back after going around the cloud
-          // we need to preserve round
-          switch (round) {
-            case 2:
-              ops.add(new RefinedTree3(RefinedTree.UPDATE_KEY_ACTION, job, round, treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
-              cnt++; break;
-            default: // update (by merge) histogram in leaves
-              ops.add(new RefinedTreeMarkAndLogRows(RefinedTree.UPDATE_KEY_ACTION, job, round, treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
-              cnt++; break;
-          }
+          ops.add(new RefinedTreeMarkAndLogRows(job, round, treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
+          cnt++;
         } else {
-          // it is a tree from this node after round-trip around the cloud
-          // so increase round number if it is < rounds, else do nothing
-          switch (round) {
-            case rounds: break;
-            default : ops.add(new RefinedTree2(RefinedTree.UPDATE_KEY_ACTION, job, (byte) (round+1), treeToRefine, new AutoBuffer(serialTree), producer, treeId, treeId, seed, data, drfParams._depth, drfParams._stat, numSplitFeatures, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, drfParams._nodesize));
-            cnt++; break;
-          }
+          cnt++;
         }
       }
       if (!ops.isEmpty()) {
@@ -108,6 +95,9 @@ public class RandomForest {
       } else { // or wait little bit for rest of nodes
         try { Thread.sleep(500); } catch (InterruptedException _) {};
       }
+      int ncnt = 0;
+      for (int i=0; i<m._refineQueues.length; i++) if (m._refineQueues[i].length == m._totalTrees) ncnt++;
+      isDone = ncnt == m._refinedForests.length;
     }
   }
 

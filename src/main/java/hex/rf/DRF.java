@@ -1,6 +1,7 @@
 package hex.rf;
 
 import hex.rf.RefinedTree.Strategy;
+import hex.rf.RefinedTreeMarkAndLogRows.ChunksRowsFilter;
 import hex.rf.Tree.StatType;
 
 import java.util.Arrays;
@@ -124,10 +125,23 @@ public abstract class DRF {
       updateRFModel(_job.dest(), numSplitFeatures);
 
       // Build local random forest
-      RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures);
+      Tree[] trees = RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures);
       // Refined random forest
-      if (_params._refine)
-        RandomForest.refineByRotating(_job, _params, localData, ntrees, numSplitFeatures);
+      if (_params._refine) {
+        RandomForest.learnByRotating(_job, _params, localData, ntrees, numSplitFeatures); // FIXME is there barrier?
+        // we finished refinement of all trees from other nodes.
+        // we can start building a new forest based on data incoming from other nodes about this node' trees
+        // 1. drop actual DA
+        dapt = null;
+        localData = null;
+        // 2. rebuild DA on local data + filtered data
+        // - collects filters
+        ChunksRowsFilter[] filters = collectFilters(trees, H2O.SELF.index());
+        dapt = DABuilder.create(this).build(_keys, filters);
+        localData = Data.make(dapt);
+        // 3. rerun random forest algo
+        RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures);
+      }
       // Wait for the running jobs
       tryComplete();
     }
@@ -136,6 +150,21 @@ public abstract class DRF {
     @Override public boolean onExceptionalCompletion(Throwable ex, CountedCompleter caller) {
       ex.printStackTrace();
       return super.onExceptionalCompletion(ex, caller);
+    }
+
+    // Assumption: refinement of all local trees has finished already
+    static ChunksRowsFilter[] collectFilters(Tree[] localTrees, int selfIdx) {
+      int nodes = H2O.CLOUD.size();
+      ChunksRowsFilter[] filters = new ChunksRowsFilter[(nodes-1)*localTrees.length];
+      int cnt = 0;
+      for (int t=0; t<localTrees.length; t++) {
+        for (int n=0; n<nodes; n++) {
+          if (n==selfIdx) continue;
+          Key fk = ChunksRowsFilter.makeKey(localTrees[t]._thisTreeKey, (byte) selfIdx, (byte) n);
+          filters[cnt++] = UKV.get(fk);
+        }
+      }
+      return filters;
     }
 
     /** Write number of split features computed on this node to a model */
@@ -279,15 +308,10 @@ public abstract class DRF {
     @Override public H2OCountedCompleter start(H2OCountedCompleter fjtask) {
       H2OCountedCompleter jobRemoval = new H2O.H2OCountedCompleter() {
         @Override public void compute2() {
-          new TAtomic<RFModel>() {
-            @Override public RFModel atomic(RFModel old) {
-              if(old == null) return null;
-              old._time = DRFJob.this.executionTime();
-              return old;
-            }
-          }.invoke(dest());
+          System.err.println("Updaste");
         }
         @Override public void onCompletion(CountedCompleter caller) {
+          finalizeModel(DRFJob.this);
           DRFJob.this.remove();
         }
       };
@@ -299,6 +323,24 @@ public abstract class DRF {
       Progress p = (Progress) UKV.get(_dest);
       return p.progress();
     }
+  }
+
+  static void finalizeModel(Job job) {
+    final long time = job.executionTime();
+    new TAtomic<RFModel>() {
+      @Override public RFModel atomic(RFModel old) {
+        if(old == null) return null;
+        RFModel m = old.clone();
+        m._time = time;
+        // merge local forests
+        m._tkeys = new Key[m._totalTrees];
+        int cnt = 0;
+        for (int i=0; i<m._localForests.length; i++)
+          for (int j=0; j<m._localForests[i].length; j++)
+            m._tkeys[cnt++] = m._localForests[i][j];
+        return m;
+      }
+    }.invoke(job.dest());
   }
 
   static void dumpRFParams(
