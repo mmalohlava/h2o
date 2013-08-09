@@ -6,12 +6,12 @@ import h2o, h2o_cmd, h2o_hosts, h2o_rf
 # RF train parameters
 
 bench_params = {
-        'nodes_count'  : 2,
+        'nodes_count'  : 4,
         'java_heap_GB' : 3
         }
 
 paramsTrainRF = { 
-            'ntree'      : 10, 
+            'ntree'      : 16, 
             #'depth'      : 300,
             'parallel'   : 1, 
             'bin_limit'  : 1024,
@@ -29,8 +29,8 @@ paramsScoreRF = {
             'out_of_bag_error_estimate': 0, 
         }
 
-DATASET_NAME="iris20kcols"
 DATASET_NAME="covtype_100k"
+DATASET_NAME="iris20kcols"
 DATASET_NAME="covtype"
 
 trainDS = {
@@ -78,18 +78,21 @@ class Basic(unittest.TestCase):
         trainKey = self.loadTrainData()
         scoreKey = self.loadScoreData()
         #time.sleep(3600)
-        kwargs   = paramsTrainRF.copy()
-        trainResultNormal = h2o_rf.trainRF(trainKey, model_key="rfm_normal", **kwargs)
-        #print h2o_rf.pp_rf_result(trainResultNormal)
-        kwargs   = paramsScoreRF.copy()
-        scoreResultNormal = h2o_rf.scoreRF(scoreKey, trainResultNormal, **kwargs)
-        
+        executeNormalRF = True
+        executeNormalRF = False
+        if executeNormalRF:
+            kwargs   = paramsTrainRF.copy()
+            trainResultNormal = h2o_rf.trainRF(trainKey, model_key="rfm_normal", **kwargs)
+            #print h2o_rf.pp_rf_result(trainResultNormal)
+            kwargs   = paramsScoreRF.copy()
+            scoreResultNormal = h2o_rf.scoreRF(scoreKey, trainResultNormal, **kwargs)
+            print "\nScoring normal forest\n========={0}".format(h2o_rf.pp_rf_result(scoreResultNormal))
+
         kwargs   = paramsTrainRF.copy()
         trainResultRefined = h2o_rf.trainRF(trainKey, refine=1, model_key="rfm_refined", **kwargs)
         #print h2o_rf.pp_rf_result(trainResultRefined)
         kwargs   = paramsScoreRF.copy()
         scoreResultRefined = h2o_rf.scoreRF(scoreKey, trainResultRefined, **kwargs)
-        print "\nScoring normal forest\n========={0}".format(h2o_rf.pp_rf_result(scoreResultNormal))
         print "\nScoring refined forest\n========={0}".format(h2o_rf.pp_rf_result(scoreResultRefined))
 
         time.sleep(3600)
