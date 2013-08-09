@@ -66,7 +66,11 @@ public class RandomForest {
     int indx = 0;
     LinkedList<RefinedTree> ops = new LinkedList<RefinedTree>();
     int cnt = 0;
-    int totalTrees = m._totalTrees - ntrees;
+    // -- ad-hoc debug
+      // assert ntrees == 2; // 4 nodes, 4trees per node => 16trees in total
+      // int totalTrees = 8; // m._totalTrees
+    // ----
+    int totalTrees = m._totalTrees;
     boolean isDone = false;
     while (cnt < totalTrees || !isDone) { // end after refining all trees from other nodes and my trees from first pass
       ops.clear();
@@ -96,7 +100,7 @@ public class RandomForest {
         try { Thread.sleep(500); } catch (InterruptedException _) {};
       }
       int ncnt = 0;
-      for (int i=0; i<m._refineQueues.length; i++) if (m._refineQueues[i].length == m._totalTrees) ncnt++;
+      for (int i=0; i<m._refineQueues.length; i++) if (m._refineQueues[i].length == totalTrees) ncnt++;
       isDone = ncnt == m._refinedForests.length;
     }
   }

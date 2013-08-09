@@ -17,7 +17,7 @@ import com.google.gson.*;
 public class RFView extends /* Progress */ Request {
 
   /** The number specifies confusion matrix refresh threshold (in percent of trees). */
-  public static final int DEFAULT_CM_REFRESH_TRESHOLD   = 25; // = 25% - means the CM will be generated each 25% of trees has been built
+  public static final int DEFAULT_CM_REFRESH_TRESHOLD   = 100; // = 25% - means the CM will be generated each 25% of trees has been built
 
   final Str _job  = new Str(JOB, "NONE");
   protected final H2OHexKey          _dataKey  = new H2OHexKey(DATA_KEY);
@@ -133,45 +133,46 @@ public class RFView extends /* Progress */ Request {
       // Compute the highest number of trees which is less then a threshold
       int modelSize = tasks * _refreshTresholdCM.value()/100;
       modelSize     = modelSize == 0 || finished==tasks ? finished : modelSize * (finished/modelSize);
-
-      // Get the computing the matrix - if no job is computing, then start a new job
-      CMJob cmJob       = ConfusionTask.make(model, modelSize, _dataKey.value()._key, _classCol.value(), weights, _oobee.value());
-      // Here the the job is running - it saved a CM which can be already finished or in invalid state.
-      CMFinal confusion = UKV.get(cmJob.dest());
-      // if the matrix is valid, report it in the JSON
-      if (confusion!=null && confusion.valid() && modelSize > 0) {
-        //finished += 1;
-        JsonObject cm       = new JsonObject();
-        JsonArray  cmHeader = new JsonArray();
-        JsonArray  matrix   = new JsonArray();
-        cm.addProperty(JSON_CM_TYPE, _oobee.value() ? "OOB error estimate" : "full scoring");
-        cm.addProperty(JSON_CM_CLASS_ERR, confusion.classError());
-        cm.addProperty(JSON_CM_ROWS_SKIPPED, confusion.skippedRows());
-        cm.addProperty(JSON_CM_ROWS, confusion.rows());
-        // create the header
-        for (String s : cfDomain(confusion, 1024))
-          cmHeader.add(new JsonPrimitive(s));
-        cm.add(JSON_CM_HEADER,cmHeader);
-        // add the matrix
-        final int nclasses = confusion.dimension();
-        JsonArray classErrors = new JsonArray();
-        for (int crow = 0; crow < nclasses; ++crow) {
-          JsonArray row  = new JsonArray();
-          int classHitScore = 0;
-          for (int ccol = 0; ccol < nclasses; ++ccol) {
-            row.add(new JsonPrimitive(confusion.matrix(crow,ccol)));
-            if (crow!=ccol) classHitScore += confusion.matrix(crow,ccol);
+      if (modelSize > 0) {
+        // Get the computing the matrix - if no job is computing, then start a new job
+        CMJob cmJob       = ConfusionTask.make(model, modelSize, _dataKey.value()._key, _classCol.value(), weights, _oobee.value());
+        // Here the the job is running - it saved a CM which can be already finished or in invalid state.
+        CMFinal confusion = UKV.get(cmJob.dest());
+        // if the matrix is valid, report it in the JSON
+        if (confusion!=null && confusion.valid() && modelSize > 0) {
+          //finished += 1;
+          JsonObject cm       = new JsonObject();
+          JsonArray  cmHeader = new JsonArray();
+          JsonArray  matrix   = new JsonArray();
+          cm.addProperty(JSON_CM_TYPE, _oobee.value() ? "OOB error estimate" : "full scoring");
+          cm.addProperty(JSON_CM_CLASS_ERR, confusion.classError());
+          cm.addProperty(JSON_CM_ROWS_SKIPPED, confusion.skippedRows());
+          cm.addProperty(JSON_CM_ROWS, confusion.rows());
+          // create the header
+          for (String s : cfDomain(confusion, 1024))
+            cmHeader.add(new JsonPrimitive(s));
+          cm.add(JSON_CM_HEADER,cmHeader);
+          // add the matrix
+          final int nclasses = confusion.dimension();
+          JsonArray classErrors = new JsonArray();
+          for (int crow = 0; crow < nclasses; ++crow) {
+            JsonArray row  = new JsonArray();
+            int classHitScore = 0;
+            for (int ccol = 0; ccol < nclasses; ++ccol) {
+              row.add(new JsonPrimitive(confusion.matrix(crow,ccol)));
+              if (crow!=ccol) classHitScore += confusion.matrix(crow,ccol);
+            }
+            // produce infinity members in case of 0.f/0
+            classErrors.add(new JsonPrimitive((float)classHitScore / (classHitScore + confusion.matrix(crow,crow))));
+            matrix.add(row);
           }
-          // produce infinity members in case of 0.f/0
-          classErrors.add(new JsonPrimitive((float)classHitScore / (classHitScore + confusion.matrix(crow,crow))));
-          matrix.add(row);
+          cm.add(JSON_CM_CLASSES_ERRORS, classErrors);
+          cm.add(JSON_CM_MATRIX,matrix);
+          cm.addProperty(JSON_CM_TREES,modelSize);
+          response.add(JSON_CM,cm);
+          // Signal end only and only if all trees were generated and confusion matrix is valid
+          done = finished >= tasks;
         }
-        cm.add(JSON_CM_CLASSES_ERRORS, classErrors);
-        cm.add(JSON_CM_MATRIX,matrix);
-        cm.addProperty(JSON_CM_TREES,modelSize);
-        response.add(JSON_CM,cm);
-        // Signal end only and only if all trees were generated and confusion matrix is valid
-        done = finished >= tasks;
       }
     } else if (_noCM.value() && finished >= tasks) done = true;
 

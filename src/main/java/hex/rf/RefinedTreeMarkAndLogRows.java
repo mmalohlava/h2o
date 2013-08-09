@@ -25,35 +25,39 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
       int numSplitFeatures, int exclusiveSplitLimit, Sampling sampler, int verbose, int nodesize) {
     super(SAVE_CHUNKS_FILTER, job, round, origTreeKey, serialTree, treeProducerIdx, treeIdx, treeId, seed, data, maxDepth, stat,
         numSplitFeatures, exclusiveSplitLimit, sampler, verbose, nodesize);
-    _crf = new ChunksRowsFilter(data._dapt._ary, data._dapt._homeKeys);
+    _crf = new ChunksRowsFilter(data._dapt._ary, data._dapt._homeKeys, treeProducerIdx, H2O.SELF.index());
+  }
+
+  private INode sharedRefine(Split split, Data data, int depth, LeafNode leaf) {
+    // Save data only if histograms are different
+    if (!histoDiffer(data, leaf)) {
+      int leafMajorClass = Utils.maxIndex(leaf._classHisto);
+      identifyChunks(data, leafMajorClass);
+    }
+    // do not modify tree
+    return leaf;
   }
 
   @Override INode refineLeafSplit(Split split, Data data, int depth, LeafNode leaf) {
-    // Save data only if histograms are different
-    if (!histoDiffer(data, leaf)) {
-      identifyChunks(data);
-    }
-    // do not modify tree
-    return leaf;
+    return sharedRefine(split, data, depth, leaf);
   }
   @Override INode refineNonLeafSplit(Split split, Data data, int depth, LeafNode leaf) {
-    if (!histoDiffer(data, leaf)) {
-      identifyChunks(data);
-    }
-    // do not modify tree
-    return leaf;
+    return sharedRefine(split, data, depth, leaf);
   }
 
   // requires preserving of chunks keys ordering - from data load to this code
   private final Key chunk(Data data, int idx) { return data._dapt._homeKeys[Math.min(idx, data._dapt._homeKeys.length-1)]; }
 
-  final void identifyChunks(Data data) {
+  final void identifyChunks(Data data, int leafMajorClass) {
     Iterator<Row> it = data.iterator();
     while (it.hasNext()) {
       Row row = it.next();
-      int cidx = row._index / data._dapt._ary.rpc(0); // FIXME: this is not exactly right since chunks can has different sizes...
-      Key chunk = chunk(data, cidx);
-      _crf.addRow(chunk, row._index);
+      int c = data.unmapClass(row.classOf());
+      if (c!=leafMajorClass) {
+        int cidx = row._index / data._dapt._ary.rpc(0); // FIXME: this is not exactly right since chunks can has different sizes...
+        Key chunk = chunk(data, cidx);
+        _crf.addRow(chunk, row._index);
+      }
     }
   }
 
@@ -76,24 +80,29 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
 
       // Close chunks/rows filter
       r._crf.close();
-      System.err.println("Node " + r._producerIdx + " needs " + r._crf.toString() + " from " + H2O.SELF.index() );
       Key key = ChunksRowsFilter.makeKey(r._origTreeKey, r._producerIdx, (byte) H2O.SELF.index());
       UKV.put(key, r._crf);
-      System.err.println("Saved filter into " + key);
     }
   };
 
   public static class ChunksRowsFilter extends Iced {
 
     public static final int INIT_SIZE = 1024;
-    Key[] _chunks;
-    int[][] _rows;
+    final Key[] _chunks;
+    final int[][] _rows;
+    /** Data consumer */
+    final int   _consumerNode;
+    /** Data provider */
+    final int   _providerNode;
 
     transient int[] _idx;
     transient int[] _startRow;
 
-    public ChunksRowsFilter(ValueArray ary, Key chunks[]) { this(ary, chunks, INIT_SIZE); }
-    public ChunksRowsFilter(ValueArray ary, Key chunks[], int size) {
+    public ChunksRowsFilter(Key chunks[], int[][] rows, int consumerNode, int providerNode) {
+      _chunks = chunks; _rows = rows; _consumerNode = consumerNode; _providerNode = providerNode;
+    }
+    public ChunksRowsFilter(ValueArray ary, Key chunks[], int consumerNode, int providerNode) { this(ary, chunks, INIT_SIZE, consumerNode, providerNode); }
+    public ChunksRowsFilter(ValueArray ary, Key chunks[], int size, int consumerNode, int providerNode) {
       _chunks = Arrays.copyOf(chunks, chunks.length);
       _idx = new int[_chunks.length];
       _rows = new int[_chunks.length][];
@@ -101,6 +110,8 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
       _startRow = new int[_chunks.length];
       _startRow[0] = 0;
       for (int i=1; i<_chunks.length; i++) _startRow[i] += _startRow[i-1] + ary.rpc(ValueArray.getChunkIndex(_chunks[i-1]));
+      _consumerNode = consumerNode;
+      _providerNode = providerNode;
     }
 
     public final int addChunk(Key c) {
@@ -134,10 +145,45 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
     @Override public String toString() {
       StringBuilder sb = new StringBuilder("ChunkRowsFilter {\n");
       for (int i=0; i<_chunks.length; i++) {
-        sb.append(" - from chunk ").append(_chunks[i].toString()).append(" located on this node needs to load ").append(_rows[i].length).append(" rows.\n");
+        sb.append(" - from chunk ").append(_chunks[i].toString()).append(" located on " + _providerNode +" node needs to load ").append(_rows[i].length).append(" rows.\n");
       }
       sb.append('}');
       return sb.toString();
+    }
+    public static ChunksRowsFilter merge(ChunksRowsFilter f1, ChunksRowsFilter f2) {
+      // @asserts
+      assert f1._chunks.length == f2._chunks.length;
+      for (int i=0; i<f1._chunks.length; i++) assert f1._chunks[i].equals(f2._chunks[i]);
+      // ---
+      Key[]   chunks = f1._chunks;
+      int[][] rows = new int[chunks.length][];
+      for (int i=0; i<chunks.length; i++) {
+        rows[i] = merge(f1._rows[i], f2._rows[i]);
+        f1._rows[i] = null; f2._rows[i] = null;
+      }
+
+      return new ChunksRowsFilter(chunks, rows, f1._consumerNode, f1._providerNode);
+    }
+    /** Merge two sorted vectors */
+    static int[] merge(int[] a, int[] b) {
+      if (a==null) return b;
+      if (b==null) return a;
+      int size = a.length + b.length;
+      int[] result = new int[size];
+      int ia=0; int ib=0; int ir=0;
+
+      while (ia < a.length || ib < b.length) {
+        if (ia < a.length && ib < b.length) {
+          int r = 0;
+          if (a[ia] < b[ib]) r = a[ia++];
+          else if (a[ia] > b[ib]) r = b[ib++];
+          else { r = a[ia++]; ib++; }
+          result[ir++] = r;
+        } else if (ib < b.length) { System.arraycopy(b, ib, result, ir, b.length - ib); ir += b.length - ib; ib = b.length;
+        } else if (ia < a.length) { System.arraycopy(a, ia, result, ir, a.length - ia); ir += a.length - ia; ia = a.length;
+        }
+      }
+      return ir!=result.length ? Arrays.copyOf(result, ir) : result;
     }
   }
 }

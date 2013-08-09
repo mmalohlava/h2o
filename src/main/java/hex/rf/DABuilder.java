@@ -152,7 +152,7 @@ class DABuilder {
           // The whole row is invalid in the following cases: all values are NaN or there is no class specified (NaN in class column)
           if (!rowIsValid) dapt.markIgnoredRow(j);
         }
-        System.err.println("Loaded " + rcnt + " rows from chunk: " + k );
+        System.err.println("Loaded " + rcnt + "/" + rows + "(" + 100*rcnt/(float)rows + ") rows from chunk: " + k );
       }
     };
   }

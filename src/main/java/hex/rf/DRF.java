@@ -125,10 +125,12 @@ public abstract class DRF {
       updateRFModel(_job.dest(), numSplitFeatures);
 
       // Build local random forest
-      Tree[] trees = RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures);
+      int halfTrees = !_params._refine ? ntrees : Math.max(1, ntrees/2);
+      halfTrees = ntrees; // building only half of trees seems as bad strategy
+      Tree[] trees = RandomForest.build(_job, _params, localData, halfTrees, numSplitFeatures);
       // Refined random forest
       if (_params._refine) {
-        RandomForest.learnByRotating(_job, _params, localData, ntrees, numSplitFeatures); // FIXME is there barrier?
+        RandomForest.learnByRotating(_job, _params, localData, halfTrees, numSplitFeatures); // FIXME is there barrier?
         // we finished refinement of all trees from other nodes.
         // we can start building a new forest based on data incoming from other nodes about this node' trees
         // 1. drop actual DA
@@ -155,16 +157,23 @@ public abstract class DRF {
     // Assumption: refinement of all local trees has finished already
     static ChunksRowsFilter[] collectFilters(Tree[] localTrees, int selfIdx) {
       int nodes = H2O.CLOUD.size();
-      ChunksRowsFilter[] filters = new ChunksRowsFilter[(nodes-1)*localTrees.length];
-      int cnt = 0;
+      ChunksRowsFilter[] filters = new ChunksRowsFilter[nodes];
       for (int t=0; t<localTrees.length; t++) {
         for (int n=0; n<nodes; n++) {
           if (n==selfIdx) continue;
           Key fk = ChunksRowsFilter.makeKey(localTrees[t]._thisTreeKey, (byte) selfIdx, (byte) n);
-          filters[cnt++] = UKV.get(fk);
+          ChunksRowsFilter f = UKV.get(fk);
+          assert f._consumerNode == selfIdx; // i just want to be sure to collect the right filters for this node
+          assert f._providerNode == n;
+          if (filters[n]==null) filters[n] = f;
+          else filters[n] = ChunksRowsFilter.merge(filters[n], f);
+          f = null; // GC?
         }
       }
-      return filters;
+      ChunksRowsFilter[] fs = new ChunksRowsFilter[nodes-1];
+      for (int i=0,cnt=0; i<filters.length;i++) if (filters[i]!=null) fs[cnt++]=filters[i];
+      System.err.println("Collect: " + Arrays.toString(filters));
+      return fs;
     }
 
     /** Write number of split features computed on this node to a model */
