@@ -8,8 +8,8 @@ paramsTrainRF = {
             'ntree'      : 50, 
             #'depth'      : 30,
             'parallel'   : 1, 
-            'bin_limit'  : 10000,
-            'ignore'     : 'AirTime,ArrDelay,DepDelay,CarrierDelay,IsArrDelayed',
+            'bin_limit'  : 1024,
+            'ignore'     : 'AirTime,ArrDelay,DepDelay,Cancelled,CancellationCode,Diverted,CarrierDelay,WeatherDelay,NASDelay,SecurityDelay,LateAircraftDelay,IsArrDelayed',
             'stat_type'  : 'ENTROPY',
             'out_of_bag_error_estimate': 1, 
             'exclusive_split_limit'    : 0,
@@ -28,6 +28,8 @@ paramsScoreRF = {
 trainDS = {
         's3bucket'    : 'h2o-airlines-unpacked',
         'filename'    : 'year2007.csv',
+        #'filename'    : 'year2005to2007.csv',
+        #'filename'    : 'allyears2k.csv',
         'timeoutSecs' : 14800,
         'header'      : 1
         }
@@ -57,9 +59,10 @@ class Basic(unittest.TestCase):
     def parseS3NFile(self, s3bucket, filename, **kwargs):
         start      = time.time()
         uri = "s3n://{0}/{1}".format(s3bucket, filename)
-        #importHDFSResult = h2o.nodes[0].import_hdfs(uri)
+        importHDFSResult = h2o.nodes[0].import_hdfs(uri)
         parseKey = h2o.nodes[0].parse(uri, **kwargs)
-        h2o.verboseprint("py-S3 parse took {0} sec".format(parse_time))
+        parse_time = time.time() - start 
+        h2o.verboseprint("py-S3N parse took {0} sec".format(parse_time))
         parseKey['python_call_timer'] = parse_time
 
         return parseKey
@@ -74,18 +77,19 @@ class Basic(unittest.TestCase):
 
     def loadTrainData(self):
         kwargs   = trainDS.copy()
-        trainKey = self.parseS3File(**kwargs)
+        trainKey = self.parseS3NFile(**kwargs)
         return trainKey
     
     def loadScoreData(self):
         kwargs   = scoreDS.copy()
-        scoreKey = self.parseS3File(**kwargs)
+        scoreKey = self.parseS3NFile(**kwargs)
         return scoreKey 
 
     def test_RF(self):
         trainKey = self.loadTrainData()
         kwargs   = paramsTrainRF.copy()
         trainResult = h2o_rf.trainRF(trainKey, refine=1, model_key="rfm_refined", **kwargs)
+        #trainResult = h2o_rf.trainRF(trainKey, model_key="rfm_normal", **kwargs)
 
         scoreKey = self.loadScoreData()
         kwargs   = paramsScoreRF.copy()
