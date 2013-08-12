@@ -143,9 +143,9 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
     }
 
     @Override public String toString() {
-      StringBuilder sb = new StringBuilder("ChunkRowsFilter {\n");
+      StringBuilder sb = new StringBuilder("ChunkRowsFilter for ").append(_consumerNode).append(" node {\n");
       for (int i=0; i<_chunks.length; i++) {
-        sb.append(" - from chunk ").append(_chunks[i].toString()).append(" located on " + _providerNode +" node needs to load ").append(_rows[i].length).append(" rows.\n");
+        sb.append(" - node ").append(_consumerNode).append(" needs to load ").append(_rows[i].length).append(" rows ").append(" from chunk ").append(_chunks[i].toString()).append(" located on ").append(_providerNode).append(" node\n");
       }
       sb.append('}');
       return sb.toString();
