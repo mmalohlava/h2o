@@ -4,6 +4,7 @@ import hex.rf.DRF.DRFTask;
 import hex.rf.RefinedTreeMarkAndLogRows.ChunksRowsFilter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import jsr166y.ForkJoinTask;
 import jsr166y.RecursiveAction;
@@ -69,6 +70,7 @@ class DABuilder {
     // building dataset's columns.
     final int[] modelDataMap = rfmodel.columnMapping(ary.colNames());
 
+    System.err.println("DABuilder -> local keys: " + Arrays.toString(keys));
     final DataAdapter dapt = new DataAdapter( ary, keys,
                                               rfmodel, modelDataMap,
                                               getRowCount(keys, filters),

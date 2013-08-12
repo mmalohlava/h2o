@@ -45,9 +45,6 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
     return sharedRefine(split, data, depth, leaf);
   }
 
-  // requires preserving of chunks keys ordering - from data load to this code
-  private final Key chunk(Data data, int idx) { return data._dapt._homeKeys[Math.min(idx, data._dapt._homeKeys.length-1)]; }
-
   final void identifyChunks(Data data, int leafMajorClass) {
     Iterator<Row> it = data.iterator();
     while (it.hasNext()) {
