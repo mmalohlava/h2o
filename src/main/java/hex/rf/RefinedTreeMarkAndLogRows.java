@@ -54,9 +54,7 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
       Row row = it.next();
       int c = data.unmapClass(row.classOf());
       if (c!=leafMajorClass) {
-        int cidx = row._index / data._dapt._ary.rpc(0); // FIXME: this is not exactly right since chunks can has different sizes...
-        Key chunk = chunk(data, cidx);
-        _crf.addRow(chunk, row._index);
+        _crf.addRow(row._index);
       }
     }
   }
@@ -114,14 +112,15 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
       _providerNode = providerNode;
     }
 
-    public final int addChunk(Key c) {
-      for (int i=0; i<_chunks.length;i++) if (_chunks[i].equals(c)) return i;
-      assert false : "This should not happen!";
-      return -1;
+    private int chunk(int row) {
+      assert row >= 0;
+      int i = _startRow.length-1;
+      while (i>0 && _startRow[i]>row) i--;
+      return i;
     }
 
-    public final void addRow(Key chunk, int row) {
-      int cidx = addChunk(chunk);
+    public final void addRow(int row) {
+      int cidx = chunk(row);
       _rows[cidx][_idx[cidx]++] = row - _startRow[cidx];
       if (_idx[cidx] == _rows[cidx].length)
         _rows[cidx] = Arrays.copyOf(_rows[cidx], 2*_rows[cidx].length);
