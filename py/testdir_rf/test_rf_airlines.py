@@ -53,6 +53,16 @@ class Basic(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         h2o.tear_down_cloud()
+
+    def parseS3NFile(self, s3bucket, filename, **kwargs):
+        start      = time.time()
+        uri = "s3n://{0}/{1}".format(s3bucket, filename)
+        #importHDFSResult = h2o.nodes[0].import_hdfs(uri)
+        parseKey = h2o.nodes[0].parse(uri, **kwargs)
+        h2o.verboseprint("py-S3 parse took {0} sec".format(parse_time))
+        parseKey['python_call_timer'] = parse_time
+
+        return parseKey
         
     def parseS3File(self, s3bucket, filename, **kwargs):
         start      = time.time()
