@@ -9,8 +9,8 @@ import java.util.Stack;
 import jsr166y.CountedCompleter;
 
 import water.*;
-import water.util.Log;
-import water.util.Utils;
+import water.util.*;
+import water.util.Log.Tag.Sys;
 import static hex.rf.MergeTreesOp.asLeaf;
 import static hex.rf.MergeTreesOp.mergeNodes;
 
@@ -64,7 +64,7 @@ public class RefinedTree extends Tree {
       if (! split.isLeafNode()) {
     	  newNode = refineNonLeafSplit(split, d, depth, asLeaf(tree));
       } else {
-        assert !split.isImpossible();
+        if (split.isImpossible()) Log.info("Refine tree: hit imposible split:");
         newNode = refineLeafSplit(split, d, depth, asLeaf(tree));
       }
       if (isLeft) parent._l = newNode; else parent._r = newNode;
