@@ -9,7 +9,7 @@ paramsTrainRF = {
             #'depth'      : 30,
             'parallel'   : 1, 
             'bin_limit'  : 1024,
-            'ignore'     : 'CRSDepTime,CRSArrTime,FlightNum,TailNum,CRSElapsedTime,AirTime,ArrDelay,DepDelay,TaxiIn,TaxiOut,Cancelled,CancellationCode,Diverted,CarrierDelay,WeatherDelay,NASDelay,SecurityDelay,LateAircraftDelay,IsArrDelayed',
+            'ignore'     : 'DepTime,ArrTime,FlightNum,TailNum,ActualElapsedTime,AirTime,ArrDelay,DepDelay,TaxiIn,TaxiOut,Cancelled,CancellationCode,Diverted,CarrierDelay,WeatherDelay,NASDelay,SecurityDelay,LateAircraftDelay,IsArrDelayed',
             'stat_type'  : 'ENTROPY',
             'out_of_bag_error_estimate': 1, 
             'exclusive_split_limit'    : 0,
