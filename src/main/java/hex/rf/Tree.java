@@ -322,13 +322,13 @@ public class Tree extends H2OCountedCompleter {
       bs.put4f(split_value());
       int skip = _l.size(); // Drop down the amount to skip over the left column
       if( skip <= 254 )  bs.put1(skip);
-      else { bs.put1(0); bs.put3(skip); }
+      else { bs.put1(0); bs.put4(skip); }
       _l.write(bs);
       _r.write(bs);
     }
     @Override public int size_impl( ) {
       // Size is: 1 byte indicator, 1byte for producer, 2 bytes col, 4 bytes val, the skip, then left, right
-      return _size=(1+1+2+4+(( _l.size() <= 254 ) ? 1 : 4)+_l.size()+_r.size());
+      return _size=(1+1+2+4+(( _l.size() <= 254 ) ? 1 : 5)+_l.size()+_r.size());
     }
     public boolean isIn(final Row row) {  return row.getEncodedColumnValue(_column) <= _split; }
     public final boolean canDecideAbout(final Row row) { return row.hasValidValue(_column); }
@@ -351,7 +351,7 @@ public class Tree extends H2OCountedCompleter {
     }
     public int size_impl( ) {
       // Size is: 1 byte indicator, 2 bytes col, 4 bytes val, the skip, then left, right
-      return _size=(1+1+2+4+(( _l.size() <= 254 ) ? 1 : 4)+_l.size()+_r.size());
+      return _size=(1+1+2+4+(( _l.size() <= 254 ) ? 1 : 5)+_l.size()+_r.size());
     }
 
     @Override void write( AutoBuffer bs ) {
@@ -362,7 +362,7 @@ public class Tree extends H2OCountedCompleter {
       bs.put4f(split_value());
       int skip = _l.size(); // Drop down the amount to skip over the left column
       if( skip <= 254 )  bs.put1(skip);
-      else { bs.put1(0); bs.put3(skip); }
+      else { bs.put1(0); bs.put4(skip); }
       _l.write(bs);
       _r.write(bs);
     }
@@ -448,7 +448,7 @@ public class Tree extends H2OCountedCompleter {
       if( ary.isNA(databits, row, col) ) return null;
       float fdat = (float)ary.datad(databits, row, col);
       int skip = (ts.get1()&0xFF);
-      if( skip == 0 ) skip = ts.get3();
+      if( skip == 0 ) skip = ts.get4();
       if (b == 'E') {
         if (fdat != fcmp)
           ts.position(ts.position() + skip);
@@ -488,7 +488,7 @@ public class Tree extends H2OCountedCompleter {
       if( Double.isNaN(ds[col]) ) return badat;
       float fdat = (float)ds[col];
       int skip = (ts.get1()&0xFF);
-      if( skip == 0 ) skip = ts.get3();
+      if( skip == 0 ) skip = ts.get4();
       if (b == 'E') {
         if (fdat != fcmp)
           ts.position(ts.position() + skip);
@@ -545,7 +545,7 @@ public class Tree extends H2OCountedCompleter {
       int col = _ts.get2();     // Column number
       float fcmp = _ts.get4f(); // Float to compare against
       int skip = (_ts.get1()&0xFF);
-      if( skip == 0 ) skip = _ts.get3();
+      if( skip == 0 ) skip = _ts.get4();
       int offl = _ts.position();      // Offset to start of *left* node
       int offr = _ts.position()+skip; // Offset to start of *right* node
       return pre(col,fcmp,producerIdx,off0,offl,offr).visit().mid(col,fcmp, producerIdx).visit().post(col,fcmp,producerIdx);
