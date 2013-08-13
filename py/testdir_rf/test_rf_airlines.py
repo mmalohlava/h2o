@@ -9,7 +9,7 @@ paramsTrainRF = {
             #'depth'      : 30,
             'parallel'   : 1, 
             'bin_limit'  : 1024,
-            'ignore'     : 'AirTime,ArrDelay,DepDelay,Cancelled,CancellationCode,Diverted,CarrierDelay,WeatherDelay,NASDelay,SecurityDelay,LateAircraftDelay,IsArrDelayed',
+            'ignore'     : 'CRSDepTime,CRSArrTime,FlightNum,TailNum,CRSElapsedTime,AirTime,ArrDelay,DepDelay,TaxiIn,TaxiOut,Cancelled,CancellationCode,Diverted,CarrierDelay,WeatherDelay,NASDelay,SecurityDelay,LateAircraftDelay,IsArrDelayed',
             'stat_type'  : 'ENTROPY',
             'out_of_bag_error_estimate': 1, 
             'exclusive_split_limit'    : 0,
@@ -86,10 +86,16 @@ class Basic(unittest.TestCase):
         return scoreKey 
 
     def test_RF(self):
+	print "Loading data...."
         trainKey = self.loadTrainData()
         kwargs   = paramsTrainRF.copy()
-        trainResult = h2o_rf.trainRF(trainKey, refine=1, model_key="rfm_refined", **kwargs)
-        #trainResult = h2o_rf.trainRF(trainKey, model_key="rfm_normal", **kwargs)
+	
+	normalRF = False
+	print "Running normal RF: {0}".format(normalRF)
+	if normalRF:
+        	trainResult = h2o_rf.trainRF(trainKey, model_key="rfm_normal", **kwargs)
+	else:
+        	trainResult = h2o_rf.trainRF(trainKey, refine=1, model_key="rfm_refined", **kwargs)
 
         scoreKey = self.loadScoreData()
         kwargs   = paramsScoreRF.copy()
