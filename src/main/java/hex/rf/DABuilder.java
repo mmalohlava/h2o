@@ -95,6 +95,7 @@ class DABuilder {
     }
     // And invoke collected jobs (load all local data)
     ForkJoinTask.invokeAll(dataInhaleJobs);
+    dapt._localRows = start_row;
 
     // Now local data are loaded, try to inhale more data from other nodes.
     if (_drf._params._useNonLocalData) {
@@ -104,17 +105,18 @@ class DABuilder {
 
     // --- Inhale data from other nodes
     if (true) {
-    dataInhaleJobs = new ArrayList<RecursiveAction>();
-    for( final ChunksRowsFilter filter : filters) {    // now read the values
-      for (int i=0; i<filter._chunks.length; i++) {
-        final Key k = filter._chunks[i];
-        final int S = start_row;
-        final int rowsInChunk = ary.rpc(ValueArray.getChunkIndex(k));
-        dataInhaleJobs.add( loadChunkAction(dapt, ary, k, modelDataMap, ncolumns, rowsInChunk, S, filter._rows[i]) );
-        start_row += filter._rows[i].length; // the job inhale only the filter rows
+      dataInhaleJobs = new ArrayList<RecursiveAction>();
+      for( final ChunksRowsFilter filter : filters) {    // now read the values
+        for (int i=0; i<filter._chunks.length; i++) {
+          final Key k = filter._chunks[i];
+          final int S = start_row;
+          final int rowsInChunk = ary.rpc(ValueArray.getChunkIndex(k));
+          dataInhaleJobs.add( loadChunkAction(dapt, ary, k, modelDataMap, ncolumns, rowsInChunk, S, filter._rows[i]) );
+          start_row += filter._rows[i].length; // the job inhale only the filter rows
+        }
       }
-    }
-    ForkJoinTask.invokeAll(dataInhaleJobs);
+      ForkJoinTask.invokeAll(dataInhaleJobs);
+      dapt._foreignRows = start_row - dapt._localRows;
     }
     // ---
 
