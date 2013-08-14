@@ -64,7 +64,7 @@ public class RefinedTree extends Tree {
       if (! split.isLeafNode()) {
     	  newNode = refineNonLeafSplit(split, d, depth, asLeaf(tree));
       } else {
-        if (split.isImpossible()) Log.info("Refine tree: hit imposible split:");
+        //if (split.isImpossible()) Log.info("Refine tree: hit imposible split:");
         newNode = refineLeafSplit(split, d, depth, asLeaf(tree));
       }
       if (isLeft) parent._l = newNode; else parent._r = newNode;
