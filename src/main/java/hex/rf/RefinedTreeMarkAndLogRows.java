@@ -18,6 +18,8 @@ import water.util.Utils;
  */
 public class RefinedTreeMarkAndLogRows extends RefinedTree {
 
+  public static final boolean SKIP_ROWS_WITH_SAME_CLASS = false;
+
   final ChunksRowsFilter _crf;
 
   public RefinedTreeMarkAndLogRows(Job job, byte round, Key origTreeKey, AutoBuffer serialTree,
@@ -50,7 +52,7 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
     while (it.hasNext()) {
       Row row = it.next();
       int c = data.unmapClass(row.classOf());
-      if (c!=leafMajorClass) {
+      if (!SKIP_ROWS_WITH_SAME_CLASS || c!=leafMajorClass) {
         _crf.addRow(row._index);
       }
     }
