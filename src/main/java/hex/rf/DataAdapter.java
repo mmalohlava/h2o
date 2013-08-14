@@ -236,4 +236,8 @@ final class DataAdapter  {
       return res;
     }
   }
+
+  String colsToString() {
+    return Arrays.toString(_c);
+  }
 }

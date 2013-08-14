@@ -122,6 +122,7 @@ class DABuilder {
 
     // Shrink data
     dapt.shrink();
+    System.err.println("DataAdapter: columns = " + dapt.colsToString());
     Log.debug(Sys.RANDF,"Inhale done in " + t_inhale);
     return dapt;
   }
