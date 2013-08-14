@@ -216,7 +216,7 @@ public class Inspect extends Request {
     JsonArray cols = new JsonArray();
     JsonArray rows = new JsonArray();
 
-    for( int i = 0; i < Math.min(va._cols.length,20); i++ ) {
+    for( int i = 0; i < Math.min(va._cols.length,100); i++ ) {
       Column c = va._cols[i];
       JsonObject json = new JsonObject();
       json.addProperty(NAME, c._name);
@@ -240,7 +240,7 @@ public class Inspect extends Request {
       for( long row = Math.max(0, startRow); row < endRow; ++row ) {
         JsonObject obj = new JsonObject();
         obj.addProperty(ROW, row);
-        for( int i = 0; i < Math.min(va._cols.length,20); ++i )
+        for( int i = 0; i < Math.min(va._cols.length,100); ++i )
           format(obj, va, row, i);
         rows.add(obj);
       }
@@ -331,7 +331,7 @@ public class Inspect extends Request {
     @Override
     public String build(Response response, JsonArray array, String contextName) {
       StringBuilder sb = new StringBuilder();
-      int cols = Math.min(20, _va._cols.length);
+      int cols = Math.min(100, _va._cols.length);
       if( array.size() == 0 ) { // Fake row, needed by builder
         array = new JsonArray();
         JsonObject fake = new JsonObject();
