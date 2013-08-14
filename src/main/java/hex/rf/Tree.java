@@ -109,7 +109,8 @@ public class Tree extends H2OCountedCompleter {
       Timer timer    = new Timer();
       _stats[0]      = new ThreadLocal<Statistic>();
       _stats[1]      = new ThreadLocal<Statistic>();
-      Data         d = _sampler.sample(_data, _seed);
+      assert _data.rows() == _data._dapt._localRows + _data._dapt._foreignRows;
+      Data         d = _sampler.sample(_data, _seed, _data._dapt._localRows);
       Statistic left = getStatistic(0, d, _seed, _exclusiveSplitLimit);
       // calculate the split
       for( Row r : d ) left.addQ(r);

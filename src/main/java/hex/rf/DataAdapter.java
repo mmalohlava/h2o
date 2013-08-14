@@ -34,8 +34,12 @@ final class DataAdapter  {
   /** Number of ignored columns */
   private int            _ignoredColumns;
 
+
+
   public final ValueArray _ary;
   public final Key[]      _homeKeys;
+  int _localRows;
+  int _foreignRows;
 
   DataAdapter(ValueArray ary, Key[] homeKeys, RFModel model, int[] modelDataMap, int rows,
               long unique, long seed, int binLimit, double[] classWt) {

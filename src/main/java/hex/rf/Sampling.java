@@ -16,6 +16,7 @@ public abstract class Sampling {
   }
 
   abstract Data sample(final Data data, long seed);
+  abstract Data sample(final Data data, long seed, int rows);
 
   /** Deterministically sample the Data at the bagSizePct.  Toss out
       invalid rows (as-if not sampled), but maintain the sampling rate. */
@@ -25,21 +26,25 @@ public abstract class Sampling {
 
     public Random(double bagSizePct, int rowsPerChunk) { _bagSizePct = bagSizePct; _rowsPerChunk = rowsPerChunk; }
 
-    @Override Data sample(final Data data, long seed) {
+    @Override final Data sample(final Data data, long seed) {
+      return sample(data, seed, data.rows());
+    }
+    // @parameter rows saying number of rows which can be permuttated. The rest of rows is appended.
+    @Override final Data sample(final Data data, long seed, int rows) {
       int [] sample;
-      sample = sampleFair(data,seed,_rowsPerChunk);
+      sample = sampleFair(data,seed,_rowsPerChunk, rows);
       // add the remaining rows
       Arrays.sort(sample); // we want an ordered sample
       return new Subset(data, sample, 0, sample.length);
       }
 
     /** Roll a fair die for sampling, resetting the random die every numrows. */
-    private int[] sampleFair(final Data data, long seed, int rowsPerChunk ) {
+    private int[] sampleFair(final Data data, long seed, int rowsPerChunk, int rows ) {
       // preconditions
       assert rowsPerChunk != 0 : "RowsPerChunk contains 0! Not able to assure deterministic sampling!";
       // init
       java.util.Random rand = null;
-      int   rows   = data.rows();
+      int   totalRows   = data.rows();
       int   size   = bagSize(rows,_bagSizePct);
       int[] sample = MemoryManager.malloc4((int)(size*1.10));
       float f      = (float) _bagSizePct;
@@ -61,7 +66,15 @@ public abstract class Sampling {
           sample[j++] = i;
         }
       }
-      return Arrays.copyOf(sample,j); // Trim out bad rows
+      if (totalRows == rows)
+        return Arrays.copyOf(sample,j); // Trim out bad rows
+      else {
+        int[] result = new int[j+(totalRows-rows)];
+        System.arraycopy(sample, 0, result, 0, j);
+        for (int i=j; i<result.length;i++) result[i] = rows++;
+        assert rows == totalRows;
+        return result;
+      }
     }
   }
 
@@ -79,6 +92,9 @@ public abstract class Sampling {
     }
 
     @Override final Data sample(final Data data, long seed) {
+      return sample(data, seed, data.rows());
+    }
+    @Override final Data sample(final Data data, long seed, int rows) {
         int sample[] = sampleLocalStratified(data, seed, _rowsPerChunk);
         Arrays.sort(sample);
         return new Subset(data, sample, 0, sample.length);
