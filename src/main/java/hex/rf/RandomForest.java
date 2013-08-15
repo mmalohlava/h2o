@@ -103,6 +103,7 @@ public class RandomForest {
       for (int i=0; i<m._refineQueues.length; i++) if (m._refineQueues[i].length == totalTrees) ncnt++;
       isDone = ncnt == m._refinedForests.length;
     }
+    System.err.println("Learn by rotation done!");
   }
 
   static void sendToNextNode(final Job job, final Key...keys) {
