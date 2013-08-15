@@ -28,16 +28,24 @@ public class RefinedTreeMarkAndLogRows extends RefinedTree {
     super(SAVE_CHUNKS_FILTER, job, round, origTreeKey, serialTree, treeProducerIdx, treeIdx, treeId, seed, data, maxDepth, stat,
         numSplitFeatures, exclusiveSplitLimit, sampler, verbose, nodesize);
     _crf = new ChunksRowsFilter(data._dapt._ary, data._dapt._homeKeys, treeProducerIdx, H2O.SELF.index());
+
+    rand = new Random(0x89ab2028437a7c8dL + seed);
   }
 
+  final Random rand ;
   private INode sharedRefine(Split split, Data data, int depth, LeafNode leaf) {
+    for (Row r : data) {
+      if (rand.nextFloat() < 0.5) _crf.addRow(r._index);
+    }
+    return leaf;
+    /*
     // Save data only if histograms are different
     if (!histoDiffer(data, leaf)) {
       int leafMajorClass = Utils.maxIndex(leaf._classHisto);
       identifyChunks(data, leafMajorClass);
     }
     // do not modify tree
-    return leaf;
+    return leaf;*/
   }
 
   @Override INode refineLeafSplit(Split split, Data data, int depth, LeafNode leaf) {
