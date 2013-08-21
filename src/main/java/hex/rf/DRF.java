@@ -115,6 +115,8 @@ public abstract class DRF {
     @Override public final void lcompute() {
       // Build data adapter for this node.
       Timer t_extract = new Timer();
+      ValueArray ary = UKV.get(_rfmodel._dataKey);
+      int[] colMapping = _rfmodel.columnMapping(ary.colNames());
       DataAdapter dapt = DABuilder.create(this).build(_keys);
       Log.debug(Sys.RANDF,"Data adapter built in " + t_extract );
       // Prepare data and compute missing parameters.
@@ -125,12 +127,12 @@ public abstract class DRF {
       updateRFModel(_job.dest(), numSplitFeatures);
 
       // Build local random forest
-      int halfTrees = !_params._refine ? ntrees : Math.max(1, ntrees/2);
-      halfTrees = ntrees; // building only half of trees seems as bad strategy
-      Tree[] trees = RandomForest.build(_job, _params, localData, halfTrees, numSplitFeatures);
+      Tree[] trees = RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures);
+      printSplitHisto(trees, colMapping);
+
       // Refined random forest
       if (_params._refine) {
-        RandomForest.learnByRotating(_job, _params, localData, halfTrees, numSplitFeatures); // FIXME is there barrier?
+        RandomForest.learnByRotating(_job, _params, localData, ntrees, numSplitFeatures); // FIXME is there barrier?
         // we finished refinement of all trees from other nodes.
         // we can start building a new forest based on data incoming from other nodes about this node' trees
         // 1. drop actual DA
@@ -142,7 +144,8 @@ public abstract class DRF {
         dapt = DABuilder.create(this).build(_keys, filters);
         localData = Data.make(dapt);
         // 3. rerun random forest algo
-        RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures);
+        Tree[] rtrees = RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures);
+        printSplitHisto(rtrees, colMapping);
       }
       // Wait for the running jobs
       tryComplete();
@@ -152,6 +155,12 @@ public abstract class DRF {
     @Override public boolean onExceptionalCompletion(Throwable ex, CountedCompleter caller) {
       ex.printStackTrace();
       return super.onExceptionalCompletion(ex, caller);
+    }
+
+    static void printSplitHisto(Tree[] trees, int[] colMapping) {
+      Key[] ks = new Key[trees.length];
+      for (int i=0; i<trees.length; i++) ks[i] = trees[i]._thisTreeKey;
+      System.err.println("> Forest from node " + H2O.SELF.index() + ": " + Arrays.toString(Tree.splitsColHisto(colMapping, ks)));
     }
 
     // Assumption: refinement of all local trees has finished already

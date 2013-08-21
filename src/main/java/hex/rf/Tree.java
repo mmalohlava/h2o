@@ -6,13 +6,11 @@ import hex.rf.Tree.SplitNode.SplitInfo;
 import java.io.IOException;
 import java.util.*;
 
-import jsr166y.CountedCompleter;
 import jsr166y.RecursiveTask;
 import water.*;
 import water.H2O.H2OCountedCompleter;
 import water.Timer;
-import water.util.Log;
-import water.util.Utils;
+import water.util.*;
 import water.util.Log.Tag.Sys;
 
 public class Tree extends H2OCountedCompleter {
@@ -562,5 +560,32 @@ public class Tree extends H2OCountedCompleter {
       @Override protected TreeVisitor post(int col, float fcmp, byte producerIdx ) { _depth--; return this; }
       @Override long result( ) {return ((long)_maxdepth<<32) | _leaves; }
     }.visit().result();
+  }
+
+  public static int[] splitsColHisto( RFModel model ) {
+    ValueArray ary = UKV.get(model._dataKey);
+    int[] colMapping = model.columnMapping(ary.colNames());
+    return splitsColHisto(colMapping, model._tkeys);
+  }
+  public static int[] splitsColHisto( int[] colMapping, Key[] trees) {
+    int result[] = new int[colMapping.length];
+    for (int i=0; i<trees.length; i++) {
+      AutoBuffer ab = new AutoBuffer(RFModel.tree(trees[i]));
+      int[] tHisto = splitsColHisto(colMapping, ab);
+      for (int j=0; j<tHisto.length; j++) result[j] += tHisto[j];
+    }
+    return result;
+  }
+
+  public static int[] splitsColHisto( final int modelDataMap[], AutoBuffer tbits) {
+    final int[] cols = new int[modelDataMap.length];
+    TreeVisitor<RuntimeException> tv = new TreeVisitor<RuntimeException>(tbits) {
+      @Override protected TreeVisitor<RuntimeException> post(int col, float fcmp, byte producerIdx) {
+        cols[modelDataMap[col]]++;
+        return this;
+      }
+    };
+    tv.visit();
+    return cols;
   }
 }

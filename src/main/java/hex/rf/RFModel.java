@@ -169,6 +169,10 @@ public class RFModel extends Model implements Cloneable, Progress {
     return DKV.get(_tkeys[tree_id]).memOrLoad();
   }
 
+  public static byte[] tree(Key tk) {
+    return DKV.get(tk).memOrLoad();
+  }
+
   /** Bad name, I know. But free all internal tree keys. */
   public void deleteKeys() {
     for( Key k : _tkeys )
