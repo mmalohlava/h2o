@@ -578,7 +578,8 @@ public class Tree extends H2OCountedCompleter {
   }
 
   public static int[] splitsColHisto( final int modelDataMap[], AutoBuffer tbits) {
-    final int[] cols = new int[modelDataMap.length];
+    final int max = Utils.max(modelDataMap);
+    final int[] cols = new int[max];
     TreeVisitor<RuntimeException> tv = new TreeVisitor<RuntimeException>(tbits) {
       @Override protected TreeVisitor<RuntimeException> post(int col, float fcmp, byte producerIdx) {
         cols[modelDataMap[col]]++;
