@@ -18,7 +18,7 @@ import water.util.Utils;
  */
 public class RefinedTreeMarkAndLogRows extends RefinedTree {
 
-  public static final boolean SKIP_ROWS_WITH_SAME_CLASS = false;
+  public static final boolean SKIP_ROWS_WITH_SAME_CLASS = true;
 
   final ChunksRowsFilter _crf;
 
