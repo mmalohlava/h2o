@@ -226,8 +226,9 @@ public class ConfusionTask extends MRTask {
     byte[] histo = new byte[_N];
     for( int ntree = 0; ntree < _model.treeCount(); ntree++ ) {
       long    seed        = _model.seed(ntree);
+      byte    producerId  = _model.producer(ntree);
       int     init_row    = _chunk_row_mapping[nchk];
-      boolean isLocalTree = isLocalTree(ntree); //_computeOOB ? isLocalTree(ntree) : false;
+      boolean isLocalTree = isLocalTree(ntree, producerId); //_computeOOB ? isLocalTree(ntree) : false;
       /* NOTE: Before changing used generator think about which kind of random generator you need:
        * if always deterministic or non-deterministic version - see hex.rf.Utils.get{Deter}RNG */
       seed = Sampling.chunkSampleSeed(seed, init_row);
@@ -282,15 +283,10 @@ public class ConfusionTask extends MRTask {
     }
   }
 
-  private boolean isLocalTree(int ntree) {
+  private boolean isLocalTree(int ntree, byte producerId) {
 //    assert _computeOOB == true : "Make sense only for oobee";
     int idx  = H2O.SELF.index();
-    Key tree = _model._tkeys[ntree];
-    Key[] localForest = _model._localForests[idx];
-    for(int i=0; i<localForest.length;i++) {
-      if (localForest[i]!=null && tree.equals(localForest[i])) return true;
-    }
-    return false;
+    return idx == producerId;
   }
 
   /** Reduction combines the confusion matrices. */

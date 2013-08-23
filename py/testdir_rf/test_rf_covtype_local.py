@@ -31,6 +31,8 @@ paramsScoreRF = {
 
 DATASET_NAME="covtype_100k"
 DATASET_NAME="iris20kcols"
+DATASET_NAME="nchess_3_8_1000"
+DATASET_NAME="nchess_4_8_1000"
 DATASET_NAME="covtype"
 
 trainDS = {
