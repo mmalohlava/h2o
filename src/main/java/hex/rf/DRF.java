@@ -160,7 +160,7 @@ public abstract class DRF {
     static void printSplitHisto(Tree[] trees, int[] colMapping) {
       Key[] ks = new Key[trees.length];
       for (int i=0; i<trees.length; i++) ks[i] = trees[i]._thisTreeKey;
-      System.err.println("> Forest from node " + H2O.SELF.index() + ": " + Arrays.toString(Tree.splitsColHisto(colMapping, ks)));
+      System.err.println("> Forest from node " + H2O.SELF.index() + ": " + Arrays.toString(Tree.splitsValColHisto(colMapping, ks[0])));
     }
 
     // Assumption: refinement of all local trees has finished already

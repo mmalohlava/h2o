@@ -230,9 +230,8 @@ public class RFModel extends Model implements Cloneable, Progress {
   }
 
   // The seed for a given tree
-  long seed(int ntree) {
-    return UDP.get8(tree(ntree), 4);
-  }
+  long seed    ( int ntree) { return UDP.get8(tree(ntree), 4); }
+  byte producer( int ntree) { return Tree.producer(tree(ntree)); }
 
   // Lazy initialization of tree leaves, depth
   private transient Counter _tl, _td;

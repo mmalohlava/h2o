@@ -9,8 +9,9 @@ public abstract class Sampling {
   /** Available sampling strategies. */
   public enum Strategy {
     RANDOM(0),
-    STRATIFIED_LOCAL(1);
+    STRATIFIED_LOCAL(1),
 //    STRATIFIED_DISTRIBUTED(2);
+    RANDOM_WITH_REPLACEMENT(3);
     int _id; // redundant id
     private Strategy(int id) { _id = id; }
   }

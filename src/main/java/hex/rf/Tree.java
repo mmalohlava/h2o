@@ -567,7 +567,7 @@ public class Tree extends H2OCountedCompleter {
     int[] colMapping = model.columnMapping(ary.colNames());
     return splitsColHisto(colMapping, model._tkeys);
   }
-  public static int[] splitsColHisto( int[] colMapping, Key[] trees) {
+  public static int[] splitsColHisto( int[] colMapping, Key... trees) {
     final int max = Utils.max(colMapping);
     final int result[] = new int[max+1];
     for (int i=0; i<trees.length; i++) {
@@ -578,12 +578,33 @@ public class Tree extends H2OCountedCompleter {
     return result;
   }
 
+  public static THistogram[] splitsValColHisto( int[] colMapping, Key tree) {
+    AutoBuffer ab = new AutoBuffer(RFModel.tree(tree));
+    THistogram[] h = splitsValColHisto(colMapping, ab);
+    return h;
+  }
+
   public static int[] splitsColHisto( final int modelDataMap[], AutoBuffer tbits) {
     final int max = Utils.max(modelDataMap);
     final int[] cols = new int[max+1];
     TreeVisitor<RuntimeException> tv = new TreeVisitor<RuntimeException>(tbits) {
       @Override protected TreeVisitor<RuntimeException> post(int col, float fcmp, byte producerIdx) {
         cols[modelDataMap[col]]++;
+        return this;
+      }
+    };
+    tv.visit();
+    return cols;
+  }
+
+  public static THistogram[] splitsValColHisto( final int modelDataMap[], AutoBuffer tbits) {
+    final int max = Utils.max(modelDataMap);
+    final THistogram[] cols = new THistogram[max+1];
+    TreeVisitor<RuntimeException> tv = new TreeVisitor<RuntimeException>(tbits) {
+      @Override protected TreeVisitor<RuntimeException> post(int col, float fcmp, byte producerIdx) {
+        int c = modelDataMap[col];
+        if (cols[c] == null) cols[c] = new THistogram();
+        cols[c].add(fcmp);
         return this;
       }
     };
