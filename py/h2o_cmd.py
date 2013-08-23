@@ -2,6 +2,12 @@ import os, json, unittest, time, shutil, sys, socket
 import h2o
 import h2o_browse as h2b, h2o_rf as h2f
 
+def dataDistrib(node=None, key=None):
+    if not key: raise Exception('No key specified')
+    if not node: node = h2o.nodes[0]
+
+    return node.data_distrib(key)
+
 # header, separator, exclude params are passed thru kwargs to node.parse
 def parseFile(node=None, csvPathname=None, key=None, key2=None, 
     timeoutSecs=30, retryDelaySecs=0.5, pollTimeoutSecs=30,
