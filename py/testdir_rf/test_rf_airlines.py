@@ -86,11 +86,18 @@ class Basic(unittest.TestCase):
         return scoreKey 
 
     def test_RF(self):
+	normalRF = False
+	#normalRF = True
+
+	print """
+Normal RF : {0}
+Train data: {1}
+Test data : {2}""".format(normalRF, trainDS['filename'], scoreDS['filename'])
+
 	print "Loading data...."
         trainKey = self.loadTrainData()
         kwargs   = paramsTrainRF.copy()
 	
-	normalRF = False
 	print "Running normal RF: {0}".format(normalRF)
 	if normalRF:
         	trainResult = h2o_rf.trainRF(trainKey, model_key="rfm_normal", **kwargs)
@@ -100,7 +107,11 @@ class Basic(unittest.TestCase):
         scoreKey = self.loadScoreData()
         kwargs   = paramsScoreRF.copy()
         scoreResult = h2o_rf.scoreRF(scoreKey, trainResult, **kwargs)
-
+	
+	print """
+Normal RF : {0}
+Train data: {1}
+Test data : {2}""".format(normalRF, trainDS['filename'], scoreDS['filename'])
         print "\nTrain\n=========={0}".format(h2o_rf.pp_rf_result(trainResult))
         print "\nScoring\n========={0}".format(h2o_rf.pp_rf_result(scoreResult))
 
