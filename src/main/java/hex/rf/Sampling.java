@@ -9,13 +9,57 @@ public abstract class Sampling {
   /** Available sampling strategies. */
   public enum Strategy {
     RANDOM(0),
-    STRATIFIED_LOCAL(1);
+    STRATIFIED_LOCAL(1),
 //    STRATIFIED_DISTRIBUTED(2);
+    RANDOM_WITH_REPLACEMENT(3);
     int _id; // redundant id
     private Strategy(int id) { _id = id; }
   }
 
   abstract Data sample(final Data data, long seed);
+
+  // Random sampling with replacement.
+  final static class RWR extends Sampling {
+    final double _bagSizePct;
+    final int[]  _rowsPerChunks;
+
+    public RWR(double bagSizePct, int[] rowsPerChunks) { _bagSizePct = bagSizePct; _rowsPerChunks = rowsPerChunks; }
+
+    @Override Data sample(Data data, long seed) {
+      int [] sample;
+      sample = sampleWR(data,seed);
+      // add the remaining rows
+      Arrays.sort(sample); // we want an ordered sample
+      System.err.println("Sampling: " + Arrays.toString(sample));
+      return new Subset(data, sample, 0, sample.length);
+    }
+
+    private int[] sampleWR(Data data, long seed) {
+      int   ssize = bagSize(data.rows(),_bagSizePct);
+      int[] sample = new int[ssize];
+      int rows = 0;  // control property
+      int rowsInSample = 0; // rows in sample
+      for (int rpc : _rowsPerChunks) {
+        int initRow = rows;
+        long chunkSamplingSeed = chunkSampleSeed(seed, initRow);
+        java.util.Random rand = Utils.getDeterRNG(chunkSamplingSeed);
+        int crows = bagSize(rpc, _bagSizePct);
+        fillSample(sample, rand, initRow, crows, initRow, rpc);
+        rows += rpc;
+        rowsInSample += crows;
+      }
+
+      assert rows == data.rows();
+      System.err.println("RowsInSample: " + rowsInSample + "/" + ssize);
+      return rowsInSample == ssize ? sample : Arrays.copyOf(sample, rowsInSample);
+    }
+
+    public static void fillSample(int[] sample, java.util.Random rand, int start, int count, int initRow, int rpc) {
+      for (int i=0; i<count; i++) {
+        sample[start+i] = initRow + rand.nextInt(rpc);
+      }
+    }
+  }
 
   /** Deterministically sample the Data at the bagSizePct.  Toss out
       invalid rows (as-if not sampled), but maintain the sampling rate. */
@@ -31,7 +75,7 @@ public abstract class Sampling {
       // add the remaining rows
       Arrays.sort(sample); // we want an ordered sample
       return new Subset(data, sample, 0, sample.length);
-      }
+    }
 
     /** Roll a fair die for sampling, resetting the random die every numrows. */
     private int[] sampleFair(final Data data, long seed, int[] rowsPerChunks ) {

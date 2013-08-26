@@ -22,7 +22,7 @@ public class RF extends Request {
   protected final EnumArgument<StatType> _statType = new EnumArgument<Tree.StatType>(STAT_TYPE, StatType.ENTROPY);
   protected final HexColumnSelect   _ignore     = new RFColumnSelect(IGNORE, _dataKey, _classCol);
   protected final H2OCategoryWeights _weights   = new H2OCategoryWeights(WEIGHTS, _dataKey, _classCol, 1);
-  protected final EnumArgument<Sampling.Strategy> _samplingStrategy = new EnumArgument<Sampling.Strategy>(SAMPLING_STRATEGY, Sampling.Strategy.RANDOM, true);
+  protected final EnumArgument<Sampling.Strategy> _samplingStrategy = new EnumArgument<Sampling.Strategy>(SAMPLING_STRATEGY, Sampling.Strategy.RANDOM_WITH_REPLACEMENT, true);
   protected final H2OCategoryStrata               _strataSamples    = new H2OCategoryStrata(STRATA_SAMPLES, _dataKey, _classCol, 67);
   protected final Int               _sample     = new Int(SAMPLE, 67, 1, 100);
   protected final Bool              _oobee      = new Bool(OOBEE,true,"Out of bag error");
@@ -32,7 +32,7 @@ public class RF extends Request {
   protected final LongInt           _seed       = new LongInt(SEED,0xae44a87f9edf1cbL,"High order bits make better seeds");
   protected final Bool              _parallel   = new Bool(PARALLEL,true,"Build trees in parallel");
   protected final Int               _exclusiveSplitLimit = new Int(EXCLUSIVE_SPLIT_LIMIT, null, 0, Integer.MAX_VALUE);
-  protected final Bool              _iterativeCM         = new Bool(ITERATIVE_CM, true, "Compute confusion matrix on-the-fly");
+  protected final Bool              _iterativeCM         = new Bool(ITERATIVE_CM, false, "Compute confusion matrix on-the-fly");
   protected final Bool              _useNonLocalData     = new Bool(USE_NON_LOCAL_DATA, false, "Try to use also non-local data.");
 
   /** Return the query link to this page */

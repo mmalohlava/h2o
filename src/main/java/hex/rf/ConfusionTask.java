@@ -1,5 +1,7 @@
 package hex.rf;
 
+import hex.rf.Sampling.Strategy;
+
 import java.util.Arrays;
 import java.util.Random;
 
@@ -61,6 +63,8 @@ public class ConfusionTask extends MRTask {
   transient private Random    _rand;
   /** @LOCAL: Data to replay the sampling algorithm */
   transient private int[]     _chunk_row_mapping;
+  /** @LOCAL: Total rows on this node. */
+  transient private int       _totalRows;
   /** @LOCAL: Number of rows at each node */
   transient private int[]     _rowsPerNode;
   /** @LOCAL: Computed mapping of model prediction classes to confusion matrix classes */
@@ -195,6 +199,7 @@ public class ConfusionTask extends MRTask {
         _chunk_row_mapping[(int)l] = off;
         off += _data.rpc(l);
       }
+    _totalRows = off;
     // Initialize number of rows per node
     _rowsPerNode = new int[H2O.CLOUD.size()];
     long chunksCount = _data.chunks();
@@ -221,18 +226,30 @@ public class ConfusionTask extends MRTask {
     _errorsPerTree = new long[_model.treeCount()];
     // Replay the Data.java's "sample_fair" sampling algorithm to exclude data
     // we trained on during voting.
+    int[] chunkSample = null;
+    if (_computeOOB && _model._samplingStrategy == Strategy.RANDOM_WITH_REPLACEMENT) {
+      int count = Sampling.bagSize(rows, _model._sample);
+      chunkSample = new int[count];
+    }
     for( int ntree = 0; ntree < _model.treeCount(); ntree++ ) {
       long    treeSeed    = _model.seed(ntree);
       byte    producerId  = _model.producerId(ntree);
-      int     init_row    = _chunk_row_mapping[nchk];
+      int     initRow     = _chunk_row_mapping[nchk];
       boolean isLocalTree = _computeOOB ? isLocalTree(ntree, producerId) : false; // tree is local
       boolean isRemoteTreeChunk = _computeOOB ? isRemoteChunk(producerId, chunkKey) : false; // this is chunk which was used for construction the tree by another node
-      if (isRemoteTreeChunk) init_row = _rowsPerNode[producerId] + producerRemoteRows(producerId, chunkKey);
+      if (isRemoteTreeChunk) initRow = _rowsPerNode[producerId] + producerRemoteRows(producerId, chunkKey);
       /* NOTE: Before changing used generator think about which kind of random generator you need:
        * if always deterministic or non-deterministic version - see hex.rf.Utils.get{Deter}RNG */
       // DEBUG: if( _computeOOB && (isLocalTree || isRemoteTreeChunk)) System.err.println(treeSeed + " : " + init_row + " (CM) " + isRemoteTreeChunk);
-      long seed = Sampling.chunkSampleSeed(treeSeed, init_row);
+      long seed = Sampling.chunkSampleSeed(treeSeed, initRow);
       Random rand = Utils.getDeterRNG(seed);
+
+      int chunkSampleIdx = 0;
+      if(_computeOOB && _model._samplingStrategy == Strategy.RANDOM_WITH_REPLACEMENT) {
+        Sampling.RWR.fillSample(chunkSample, rand, 0, chunkSample.length, 0, rows);
+        Arrays.sort(chunkSample);
+        System.err.println("CM______: " + Arrays.toString(chunkSample));
+      }
       // Now for all rows, classify & vote!
       ROWS: for( int row = 0; row < rows; row++ ) {
         // ------ THIS CODE is crucial and serve to replay the same sequence
@@ -249,6 +266,9 @@ public class ConfusionTask extends MRTask {
           case STRATIFIED_LOCAL:
             int clazz = (int) _data.data(cdata, row, _classcol) - cmin;
             if (sampledItem < _model._strataSamples[clazz] ) continue ROWS;
+            break;
+          case RANDOM_WITH_REPLACEMENT:
+            if (chunkSample[chunkSampleIdx] == rows) { chunkSampleIdx++; continue ROWS; }
             break;
           default: assert false : "The selected sampling strategy does not support OOBEE replay!"; break;
           }
