@@ -537,4 +537,25 @@ public class Utils {
       return null;
     }
   }
+
+  /** Join two sorted vectors. */
+  public static final int[] join(int[] a, int[] b) {
+    if (a==null) return b;
+    if (b==null) return a;
+    int[] result = new int[a.length + b.length];
+    int ia = 0; int ib = 0; int ir = 0;
+
+    while (ia < a.length || ib < b.length) {
+      if (ia < a.length && ib < b.length) {
+        int r = 0;
+        if (a[ia] < b[ib]) r = a[ia++];
+        else if (a[ia] > b[ib]) r = b[ib++];
+        else { r = a[ia++]; ib++; }
+        result[ir++] = r;
+      } else if (ib < b.length) { System.arraycopy(b, ib, result, ir, b.length - ib); ir += b.length - ib; ib = b.length;
+      } else if (ia < a.length) { System.arraycopy(a, ia, result, ir, a.length - ia); ir += a.length - ia; ia = a.length;
+      }
+    }
+    return ir!=result.length ? Arrays.copyOf(result, ir) : result;
+  }
 }
