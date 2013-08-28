@@ -125,7 +125,9 @@ public abstract class DRF {
       updateRFModel(_job.dest(), numSplitFeatures, rkeys);
 
       // Build local random forest
-      RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures, rowsPerChunks);
+      assert rkeys == NO_KEYS;
+      RFDIvotes.build(_job, _params, _rfmodel._dataKey, localData, ntrees, numSplitFeatures, rowsPerChunks, lkeys);
+
       // Wait for the running jobs
       tryComplete();
     }

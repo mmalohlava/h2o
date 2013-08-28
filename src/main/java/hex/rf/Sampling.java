@@ -18,6 +18,37 @@ public abstract class Sampling {
 
   abstract Data sample(final Data data, long seed);
 
+  static Data sample(Data d, int[] sample) {
+    return new Subset(d, sample, 0, sample.length);
+  }
+
+  // Sampling over all data on the node, now chunks
+  static int[] sample(Data d, long seed, double bagSizePct, int[] mispredRows, double c) {
+    int   ssize = bagSize(d.rows(), bagSizePct);
+    int[] sample = new int[ssize];
+    int rows = d.rows();
+    java.util.Random rand = Utils.getDeterRNG(seed);
+    for (int i=0; i<ssize; i++) {
+      sample[i] = -1;
+      while (sample[i]<0) { // NOTE: this is inefficient (=takes many iteration) when c is too small and mispredRows contains only a few items
+        int row = rand.nextInt(rows);
+        if (mispredRows.length > 0) {
+          int idx = Arrays.binarySearch(mispredRows, row);
+          // Prefer mispredicted rows
+          if (idx>=0) sample[i]=row;
+          else { // Use a row with probability c
+            float f = rand.nextFloat();
+            if (f < c) sample[i] = row;
+          }
+        } else {
+          sample[i] = row;
+        }
+      }
+    }
+    Arrays.sort(sample);
+    return sample;
+  }
+
   // Random sampling with replacement.
   final static class RWR extends Sampling {
     final double _bagSizePct;

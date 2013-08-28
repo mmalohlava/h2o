@@ -81,7 +81,7 @@ public class Data implements Iterable<Row> {
       } else { // make a random choice about non
         putToLeft = _rng.nextBoolean();
       }
-      
+
       if (putToLeft) {
         ls.addQ(row);
         ++l;
@@ -165,7 +165,7 @@ public class Data implements Iterable<Row> {
     int[] permutation = getPermutationArray();
     int cidx = node._column;
     int l =  _dapt.hasAnyInvalid(cidx) || _dapt.hasAnyInvalid(_dapt.columns()-1)
-      ? filterInv(node,permutation,ls,rs) 
+      ? filterInv(node,permutation,ls,rs)
       : filterVal(node,permutation,ls,rs);
     ls.applyClassWeights();     // Weight the distributions
     rs.applyClassWeights();     // Weight the distributions
@@ -204,6 +204,21 @@ public class Data implements Iterable<Row> {
     int[] perm = MemoryManager.malloc4(rows());
     for( int i = 0; i < perm.length; ++i ) perm[i] = i;
     return perm;
+  }
+
+  // Returns a complement to given sample.
+  // Expect sorted sample as a subset of <0, data.rows()-1>
+  public int[] complement(int[] sample) {
+    int len = rows(); // optimistic estimate of lenght
+    int[] cmpl = new int[len];
+    int cnt = 0; // index to complement
+    int sidx = 0; // index to sample
+    // NOTE: expect that sample and data rows have ordered indexes
+    for (int r=0; r<rows(); r++) {
+      while (sidx < sample.length && sample[sidx] < r) sidx++;
+      if (sidx>=sample.length || sample[sidx] != r) cmpl[cnt++] = r;
+    }
+    return cmpl.length == cnt ? cmpl : Arrays.copyOf(cmpl, cnt);
   }
 
   public int colMinIdx(int i) { return _columnInfo[i].min; }

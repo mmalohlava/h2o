@@ -80,6 +80,12 @@ public class Utils {
     return result;
   }
 
+  public static int sum(byte[] from) {
+    int result = 0;
+    for (byte d: from) result += d;
+    return result;
+  }
+
   public static String sampleToString(int[] val, int max) {
     if (val == null || val.length < max) return Arrays.toString(val);
 

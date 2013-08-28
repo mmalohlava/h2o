@@ -41,6 +41,7 @@ public class Tree extends H2OCountedCompleter {
   final long     _seed;         // Pseudo random seed: used to playback sampling
   int            _exclusiveSplitLimit;
   int            _verbose;
+  Key            _thisTreeKey;
   final byte     _producerId;   // Id of node producing this tree
 
   /**
@@ -66,7 +67,7 @@ public class Tree extends H2OCountedCompleter {
     return true;
   }
 
-  private Statistic getStatistic(int index, Data data, long seed, int exclusiveSplitLimit) {
+  protected Statistic getStatistic(int index, Data data, long seed, int exclusiveSplitLimit) {
     Statistic result = _stats[index].get();
     if( result==null ) {
       result  = _type == StatType.GINI ?
@@ -77,29 +78,6 @@ public class Tree extends H2OCountedCompleter {
     result.forgetFeatures();   // All new features
     result.reset(data, seed);
     return result;
-  }
-
-  private StringBuffer computeStatistics() {
-    StringBuffer sb = new StringBuffer();
-    ArrayList<SplitInfo>[] stats = new ArrayList[_data.columns()];
-    for (int i = 0; i < _data.columns()-1; i++) stats[i] = new ArrayList<Tree.SplitNode.SplitInfo>();
-    _tree.computeStats(stats);
-    for (int i = 0; i < _data.columns()-1; i++) {
-      String colname = _data.colName(i);
-      ArrayList<SplitInfo> colSplitStats = stats[i];
-      Collections.sort(colSplitStats);
-      int usage = 0;
-      for (SplitInfo si : colSplitStats) {
-        usage += si._used;
-      }
-      sb.append(colname).append(':').append(usage).append("x");
-      for (SplitInfo si : colSplitStats) {
-        sb.append(", <=").append(Utils.p2d(si.splitNode().split_value())).append('{').append(si.affectedLeaves()).append("}x"+si._used+" ");
-      }
-
-      sb.append('\n');
-    }
-    return sb;
   }
 
   // Actually build the tree
@@ -118,11 +96,12 @@ public class Tree extends H2OCountedCompleter {
         ? new LeafNode(_data.unmapClass(spl._split), d.rows())
         : new FJBuild (spl, d, 0, _seed).compute();
 
-      if (_verbose > 1)  Log.info(Sys.RANDF,computeStatistics().toString());
       _stats = null; // GC
 
       // Atomically improve the Model as well
-      appendKey(_job.dest(),toKey());
+
+      _thisTreeKey = toKey();
+      appendKey(_job.dest(),_thisTreeKey);
       StringBuilder sb = new StringBuilder("[RF] Tree : ").append(_data_id+1);
       sb.append(" d=").append(_tree.depth()).append(" leaves=").append(_tree.leaves()).append(" done in ").append(timer).append('\n');
       Log.debug(Sys.RANDF,_tree.toString(sb,  _verbose > 0 ? Integer.MAX_VALUE : 200).toString());
@@ -143,7 +122,7 @@ public class Tree extends H2OCountedCompleter {
     }.invoke(model);
   }
 
-  private class FJBuild extends RecursiveTask<INode> {
+  protected class FJBuild extends RecursiveTask<INode> {
     final Statistic.Split _split;
     final Data _data;
     final int _depth;

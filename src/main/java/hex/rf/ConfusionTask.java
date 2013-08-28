@@ -248,7 +248,7 @@ public class ConfusionTask extends MRTask {
       if(_computeOOB && _model._samplingStrategy == Strategy.RANDOM_WITH_REPLACEMENT) {
         Sampling.RWR.fillSample(chunkSample, rand, 0, chunkSample.length, 0, rows);
         Arrays.sort(chunkSample);
-        System.err.println("CM______: " + Arrays.toString(chunkSample));
+        //System.err.println("CM______: " + Arrays.toString(chunkSample));
       }
       // Now for all rows, classify & vote!
       ROWS: for( int row = 0; row < rows; row++ ) {
@@ -268,7 +268,8 @@ public class ConfusionTask extends MRTask {
             if (sampledItem < _model._strataSamples[clazz] ) continue ROWS;
             break;
           case RANDOM_WITH_REPLACEMENT:
-            if (chunkSample[chunkSampleIdx] == rows) { chunkSampleIdx++; continue ROWS; }
+            //while (chunkSample[chunkSampleIdx] < row) chunkSampleIdx++;
+            //if (chunkSample[chunkSampleIdx] == row) { chunkSampleIdx++; continue ROWS; }
             break;
           default: assert false : "The selected sampling strategy does not support OOBEE replay!"; break;
           }
