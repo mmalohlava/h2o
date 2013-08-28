@@ -552,8 +552,10 @@ public class Utils {
         else if (a[ia] > b[ib]) r = b[ib++];
         else { r = a[ia++]; ib++; }
         result[ir++] = r;
-      } else if (ib < b.length) { System.arraycopy(b, ib, result, ir, b.length - ib); ir += b.length - ib; ib = b.length;
-      } else if (ia < a.length) { System.arraycopy(a, ia, result, ir, a.length - ia); ir += a.length - ia; ia = a.length;
+      } else if (ib < b.length) {
+        System.arraycopy(b, ib, result, ir, b.length - ib); ir += b.length - ib; ib = b.length;
+      } else if (ia < a.length) {
+        System.arraycopy(a, ia, result, ir, a.length - ia); ir += a.length - ia; ia = a.length;
       }
     }
     return ir!=result.length ? Arrays.copyOf(result, ir) : result;
