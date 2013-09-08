@@ -181,7 +181,7 @@ def scoreRF(scoreParseKey, trainResult, **kwargs):
     start = time.time()
     data_key = scoreParseKey['destination_key']
     # NOTE: response_variable is required, and passed from kwargs here
-    scoreResult = h2o_cmd.runRFView(None, data_key, rfModelKey, ntree, **kwargs)
+    scoreResult = h2o_cmd.runRFView(data_key=data_key, model_key=rfModelKey,ntree=ntree, **kwargs)
 
     rftime      = time.time()-start 
     h2o.verboseprint("RF score results: ", scoreResult)

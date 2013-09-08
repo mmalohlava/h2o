@@ -195,7 +195,7 @@ public class RandomForest {
                           /* FIXME strata*/ null,
                           ARGS.verbose,
                           ARGS.exclusive,
-                          false);
+                          false, null);
     RFModel model = drfJob.get();  // block on all nodes!
     Log.debug(Sys.RANDF,"Random forest finished in TODO"/*+ drf._t_main*/);
 

@@ -54,6 +54,7 @@ public class Constants extends Iced {
   public static final String CONTENTS              = "contents";
   public static final String COUNT                 = "count";
   public static final String DATA_KEY              = "data_key";
+  public static final String TEST_KEY              = "test_key";
   public static final String DEPTH                 = "depth";
   public static final String DESCRIPTION           = "description";
   public static final String DEST_KEY              = "destination_key";
@@ -112,6 +113,7 @@ public class Constants extends Iced {
   public static final String NODE                  = "node";
   public static final String NODE_NAME             = "node_name";
   public static final String NODES                 = "nodes";
+  public static final String DIVERSITY             = "diversity";
   public static final String NORMALIZE             = "normalize";
   public static final String NUM_COLS              = "num_cols";
   public static final String NUM_CPUS              = "num_cpus";

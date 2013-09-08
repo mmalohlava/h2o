@@ -23,10 +23,11 @@ public abstract class DRF {
    */
   public static final DRFJob execute(Key modelKey, int[] cols, ValueArray ary, int ntrees, int depth, int binLimit,
       StatType stat, long seed, boolean parallelTrees, double[] classWt, int numSplitFeatures,
-      Sampling.Strategy samplingStrategy, float sample, float[] strataSamples, int verbose, int exclusiveSplitLimit, boolean useNonLocalData) {
+      Sampling.Strategy samplingStrategy, float sample, float[] strataSamples, int verbose, int exclusiveSplitLimit, boolean useNonLocalData,
+      Key testKey) {
 
     // Create DRF remote task
-    final DRFTask drfTask = create(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData);
+    final DRFTask drfTask = create(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, testKey);
     // Create DRF user job & start it
     final DRFJob  drfJob  = new DRFJob(jobName(drfTask), modelKey);
     drfJob.start(drfTask);
@@ -43,7 +44,7 @@ public abstract class DRF {
     Key modelKey, int[] cols, ValueArray ary, int ntrees, int depth, int binLimit,
     StatType stat, long seed, boolean parallelTrees, double[] classWt, int numSplitFeatures,
     Sampling.Strategy samplingStrategy, float sample, float[] strataSamples,
-    int verbose, int exclusiveSplitLimit, boolean useNonLocalData) {
+    int verbose, int exclusiveSplitLimit, boolean useNonLocalData, Key testKey) {
 
     // Construct the RFModel to be trained
     DRFTask drf  = new DRFTask();
@@ -53,7 +54,7 @@ public abstract class DRF {
     // But it will need to be changed with new fluid vectors
     //assert ary._rpc == null : "DRF does not support different sizes of chunks for now!";
     int numrows = (int) (ValueArray.CHUNK_SZ/ary._rowsize);
-    drf._params = DRFParams.create(cols[cols.length-1], ntrees, depth, numrows, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData);
+    drf._params = DRFParams.create(cols[cols.length-1], ntrees, depth, numrows, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, testKey);
     // Verbose debug print
     if (verbose>0) dumpRFParams(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData);
     // Validate parameters
@@ -126,7 +127,8 @@ public abstract class DRF {
 
       // Build local random forest
       assert rkeys == NO_KEYS;
-      RFDIvotes.build(_job, _params, _rfmodel._dataKey, localData, ntrees, numSplitFeatures, rowsPerChunks, lkeys);
+      Key testKey = _params._testKey;
+      RFDIvotes.build(_job, _params, _rfmodel._dataKey, localData, ntrees, numSplitFeatures, rowsPerChunks, lkeys, testKey);
 
       // Wait for the running jobs
       tryComplete();
@@ -259,12 +261,14 @@ public abstract class DRF {
     int _numrows;
     /** Pseudo random seed initializing RF algorithm */
     long _seed;
+    /** Test data*/
+    Key _testKey;
 
     public static final DRFParams create(int col, int ntrees, int depth, int numrows, int binLimit,
         StatType statType, long seed, boolean parallelTrees, double[] classWt,
         int numSplitFeatures, Sampling.Strategy samplingStrategy, float sample,
         float[] strataSamples, int verbose, int exclusiveSplitLimit,
-        boolean useNonLocalData) {
+        boolean useNonLocalData, Key testKey) {
 
       DRFParams drfp = new DRFParams();
       drfp._ntrees           = ntrees;
@@ -283,6 +287,7 @@ public abstract class DRF {
       drfp._strataSamples    = strataSamples;
       drfp._numrows          = numrows;
       drfp._useNonLocalData  = useNonLocalData;
+      drfp._testKey          = testKey;
       return drfp;
     }
   }

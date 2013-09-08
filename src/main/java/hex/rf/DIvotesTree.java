@@ -49,23 +49,89 @@ public class DIvotesTree extends Tree {
     tryComplete();
   }
 
-  public static class OOBEE {
+  /** Error Estimate */
+  public static class EE {
     int[] _misrows;
     int _totalRows;
 
-
-    public OOBEE(int[] misrows, int totalRows) { _misrows = misrows; _totalRows = totalRows; }
+    public EE(int[] misrows, int totalRows) { _misrows = misrows; _totalRows = totalRows; }
     public double error() { return (double) _misrows.length / _totalRows; }
+    @Override public String toString() {
+      return _totalRows +" / " + Arrays.toString(_misrows);
+    }
   }
 
-  public static OOBEE voteOOB(int k, Key dataKey, Key modelKey, int classcol, Key[] localChunks, int[] chunkRowMapping, Key[] trees, Key[] oobKeys) {
+  public static EE voteOOB(int k, Key modelKey, Key dataKey, int classcol, Key[] localChunks, int[] chunkRowMapping, Key[] trees, Key[] oobKeys) {
     OOBVotingTask voting = new OOBVotingTask(k, trees, oobKeys, dataKey, modelKey, classcol, chunkRowMapping);
-    voting.invoke(localChunks);
+    voting.invoke(localChunks); // invoke only on specified chunks
 
-    System.err.println("MISSED ROWS: " + Arrays.toString(voting._misrows));
-    System.err.println("TOTAL  ROWS: " + voting._totalRows);
+    return new EE(voting._misrows, voting._totalRows);
+  }
 
-    return new OOBEE(voting._misrows, voting._totalRows);
+  public static EE vote(int k, Key modelKey, Key testDataKey, int classcol, Key[] trees, int[] chunkRowMapping) {
+    VotingTask voting = new VotingTask(k, trees, testDataKey, modelKey, classcol, chunkRowMapping);
+    // invoke on test data
+    voting.invoke(testDataKey);
+
+    return new EE(voting._misrows, voting._totalRows);
+  }
+
+  public static int[][][] diversity(Key modelKey, Key testDataKey, int classcol, int[] chunkRowsMapping) {
+    RFModel rfModel = UKV.get(modelKey);
+    EE[] missesPerNodes = new EE[rfModel._localForests.length];
+    // dummy vote per node
+    for (int node=0; node<rfModel._localForests.length; node++) {
+      Key[] nodeForest = rfModel._localForests[node];
+      missesPerNodes[node] = vote(nodeForest.length-1, modelKey, testDataKey, classcol, nodeForest, chunkRowsMapping);
+    }
+    //for (int i=0; i<missesPerNodes.length;i++) System.err.println(missesPerNodes[i]);
+    int N = missesPerNodes.length;
+    int[][][] result = new int[N*N][][];
+    for (int i=0; i<N; i++) {
+      for (int j=0; j<N; j++) {
+        int pidx = i*N + j;
+        if (i==j) result[pidx] = null;
+        else {
+          int[] ti = missesPerNodes[i]._misrows;
+          int[] tj = missesPerNodes[j]._misrows;
+          int a=0,b=0,c=0,d=0; // a = both correct, b=i-correct,j-wrong, c=i-wrong,j-correct, d=both wrong
+          assert missesPerNodes[i]._totalRows == missesPerNodes[j]._totalRows;
+          int iidx = 0, jidx = 0;
+          int lastMiss = -1;
+          int total = missesPerNodes[i]._totalRows;
+          while (iidx < ti.length || jidx < tj.length) {
+            if (ti[iidx] == tj[jidx]) { // both misses
+              d++;
+              a += ti[iidx] - lastMiss - 1; // agree on previous ( lastMiss, ti[iidx] ) votes
+              lastMiss=ti[iidx];
+              iidx++; jidx++;
+            } else if (ti[iidx] < tj[jidx]) { // ti-misses, tj is correct for ti[iidx]
+              c++;
+              a += ti[iidx] - lastMiss - 1;
+              lastMiss = ti[iidx];
+              iidx++;
+            } else { // ti is correct, but tj is wrong
+              b++;
+              a += tj[jidx] - lastMiss - 1;
+              lastMiss = tj[jidx];
+              jidx++;
+            }
+            if (iidx == ti.length) {
+              a += total-lastMiss-1; // optimistically agree on all the rest
+              while (jidx < tj.length) { a--; b++; jidx++; } // compute all tj-wrong rows, but decrease optimistically computed a
+            }
+            if (jidx == tj.length) {
+              a += total-lastMiss-1; // optimistically agree on all the rest
+              while (iidx < ti.length) { a--; c++; iidx++; } // compute all ti-wrong rows, but decrease optimistically computed a
+            }
+          }
+          int[][] tmpR = result[pidx] = new int[2][2];
+          tmpR[0][0] = a; tmpR[1][1] = d;
+          tmpR[0][1] = b; tmpR[1][0] = c;
+        }
+      }
+    }
+    return result;
   }
 
   /** Perform voting over OOB instances.
@@ -131,7 +197,6 @@ public class DIvotesTree extends Tree {
 
       for( int ntree=0; ntree < ntrees; ntree++ ) {
         byte[] treeBits = DKV.get(_trees[ntree]).memOrLoad(); // FIXME: cache it
-        long treeSeed = Tree.seed(treeBits);
         byte producerId = Tree.producerId(treeBits);
         assert producerId == H2O.SELF.index() : "Ups. Tree is voted on other node?";
 
@@ -172,6 +237,98 @@ public class DIvotesTree extends Tree {
     }
 
     @Override public void reduce(OOBVotingTask drt) {
+      _totalRows += drt._totalRows;
+      if (drt._misrows!=null) {
+        // do sorted merge
+        _misrows = Utils.join(_misrows, drt._misrows);
+      }
+    }
+  }
+
+  public static class VotingTask extends MRTask<VotingTask> {
+    final int _k;
+    /* @IN */
+    final Key[] _trees;
+    /* @IN */
+    final Key   _dataKey;
+    /* @IN */
+    final Key   _modelKey;
+    /* @IN */
+    final int   _classcol;
+    /* @IN */
+    final int[] _chunkRowMapping;
+
+    /* @OUT misclassified rows. */
+    int[] _misrows;
+    /* @OUT */
+    int _totalRows;
+
+    transient ValueArray _data;
+    transient int _N; // number of classes in response column
+    transient int _cmin;
+    transient int[] _modelColMap;
+
+    public VotingTask(int k, Key[] trees, Key dataKey, Key modelKey, int classcol, int[] chunkRowMapping) {
+      super();
+      _k = k;
+      _trees = trees;
+      _dataKey = dataKey;
+      _modelKey = modelKey;
+      _classcol = classcol;
+      _chunkRowMapping = chunkRowMapping;
+      System.err.println(trees.length + " : " + Arrays.toString(trees));
+    }
+
+    @Override public void init() {
+      super.init();
+      _data = UKV.get(_dataKey);
+      RFModel model  = UKV.get(_modelKey);
+      _modelColMap = model.columnMapping(_data.colNames());
+      // Response parameters (no values alignment !!)
+      Column[] cols = _data._cols;
+      Column respCol = cols[_classcol];
+      _N = (int) respCol.numDomainSize();
+      _cmin = (int) respCol._min;
+    }
+
+    @Override public void map(Key ckey) {
+      System.out.println("DIvotesTree.VotingTask.map(): " + ckey);
+      final AutoBuffer cdata = _data.getChunk(ckey); // data stored in chunk
+      final int cIdx = (int) ValueArray.getChunkIndex(ckey); // chunk index
+      final int rows = _data.rpc(cIdx); // rows in chunk
+      final int initRow = _chunkRowMapping[cIdx];
+      final int ntrees  = _k+1;
+
+      int[] votes = new int[rows];
+
+      for( int ntree=0; ntree < ntrees; ntree++ ) {
+        byte[] treeBits = DKV.get(_trees[ntree]).memOrLoad(); // FIXME: cache it
+
+        // Find a start row idx for this chunk
+        ROWS: for ( int row=0; row<rows; row++) {
+          // Bail out of broken rows with NA in class column.
+          // Do not skip yet the rows with NAs in the rest of columns
+          if( _data.isNA(cdata, row, _classcol)) continue ROWS;
+          // Make a prediction for given tree and out-of-bag row
+          int prediction = Tree.classify(new AutoBuffer(treeBits), _data, cdata, row, _modelColMap, (short)_N);
+          if( prediction >= _N ) continue ROWS; // Junk row cannot be predicted
+          int dataResponse = (int) (_data.data(cdata, row, _classcol)) - _cmin;
+          if (prediction == dataResponse)
+            votes[row]++; // Vote the row
+        }
+        treeBits = null;
+      }
+
+      int majority = ntrees / 2 + 1; // 1 node, majority = 1, 2 nodes => majority 2, 3nodes = majority 2
+      int mispredRows = 0;
+      for (int r=0; r<votes.length; r++) if (votes[r] < majority) mispredRows++;
+      _misrows = new int[mispredRows];
+      for (int r=0,cnt=0; r<votes.length;r++)
+        if (votes[r] < majority) _misrows[cnt++] = r + initRow;
+      _totalRows += rows; // RPC
+    }
+
+    @Override public void reduce(VotingTask drt) {
       _totalRows += drt._totalRows;
       if (drt._misrows!=null) {
         // do sorted merge

@@ -15,6 +15,7 @@ import com.google.gson.JsonObject;
 public class RF extends Request {
 
   protected final H2OHexKey         _dataKey    = new H2OHexKey(DATA_KEY);
+  protected final H2OKey            _testKey    = new H2OKey(TEST_KEY, false);
   protected final HexKeyClassCol    _classCol   = new HexKeyClassCol(CLASS, _dataKey);
   protected final Int               _numTrees   = new Int(NUM_TREES,50,0,Integer.MAX_VALUE);
   protected final Int               _features   = new Int(FEATURES, null, 1, Integer.MAX_VALUE);
@@ -136,7 +137,8 @@ public class RF extends Request {
               strataSamples,
               0, /* verbose level is minimal here */
               exclusiveSplitLimit,
-              _useNonLocalData.value()
+              _useNonLocalData.value(),
+              _testKey.value()
               );
       // Collect parameters required for validation.
       JsonObject response = new JsonObject();

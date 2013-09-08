@@ -1,6 +1,6 @@
 package hex.rf;
 
-import hex.rf.DIvotesTree.OOBEE;
+import hex.rf.DIvotesTree.EE;
 import hex.rf.DRF.DRFParams;
 import hex.rf.Sampling.Strategy;
 
@@ -30,7 +30,8 @@ public class RFDIvotes {
                       int ntrees,
                       int numSplitFeatures,
                       int[] rowsPerChunks,
-                      Key[] localChunks) {
+                      Key[] localChunks,
+                      Key testDataKey) {
     assert drfParams._samplingStrategy == Strategy.RANDOM_WITH_REPLACEMENT : "Unsupported sampling strategy!";
     assert rowsPerChunks.length == localChunks.length;
 
@@ -46,14 +47,17 @@ public class RFDIvotes {
 
     Key[] forest = new Key[ntrees];
     Key[] oobKeys = new Key[ntrees];
-    int[] chunkRowsMapping = computeInitRows(dataKey, localChunks);
-    int totalRows = Utils.sum(rowsPerChunks);
-
+    int[] chunkRowsMapping = computeInitRows(dataKey, localChunks, true);
+    int[] testChunkRowsMapping = testDataKey!=null ? computeInitRows(testDataKey) : null;
+    System.err.println("Local chunks: " + Arrays.toString(localChunks));
+    System.err.println("Test key: " + testDataKey);
+    System.err.println("ntrees: " + ntrees);
     double p = 0.75;
     double[] oobee = new double[ntrees];
     double e[] = new double[ntrees];
     double r[] = new double[ntrees];
     double c[] = new double[ntrees];
+    final boolean debug = false;
     int[] mispredRows = NONE_ROWS;
     // build each tree ~ k-th iteration
     for (int k = 0; k < ntrees; ++k) {
@@ -65,8 +69,8 @@ public class RFDIvotes {
       OOBSample oob_k = new OOBSample(k,data.complement(sample_k));
       oobKeys[k] = makeOOBKey(k);
       UKV.put(oobKeys[k], oob_k);
-      System.err.println("Sample: " +sample_k.length +":"+ Arrays.toString(sample_k));
-      System.err.println("OOB   : " +oob_k._oob.length+":"+ Arrays.toString(oob_k._oob));
+      if (debug) System.err.println("Sample: " +sample_k.length +":"+ Arrays.toString(sample_k));
+      if (debug) System.err.println("OOB   : " +oob_k._oob.length+":"+ Arrays.toString(oob_k._oob));
       // Builder for a tree
       DIvotesTree treeBuilder = new DIvotesTree(job, data, producerId, drfParams._depth, drfParams._stat, numSplitFeatures, treeSeed,
                           k, drfParams._exclusiveSplitLimit, sampler, drfParams._verbose, sample_k);
@@ -74,20 +78,25 @@ public class RFDIvotes {
       ForkJoinTask.invokeAll(treeBuilder);
       forest[k] = treeBuilder._thisTreeKey;
       treeBuilder = null; // it is not needed anymore
-
       sample_k = null;
+
       // Vote about current forest
-      OOBEE oobeeResult = DIvotesTree.voteOOB(k, dataKey, job.dest(), drfParams._classcol, localChunks, chunkRowsMapping, forest, oobKeys);
+      EE oobeeResult = DIvotesTree.voteOOB(k, job.dest(), dataKey, drfParams._classcol, localChunks, chunkRowsMapping, forest, oobKeys);
+      if (debug) System.err.println("MISSED ROWS: " + Arrays.toString(oobeeResult._misrows));
+      if (debug) System.err.println("TOTAL  ROWS: " + oobeeResult._totalRows);
       mispredRows = oobeeResult._misrows;
       oobee[k] = oobeeResult.error();
       System.err.println("Forest 0.." + k + " has oobee="+oobee[k]);
 
       // Estimate e(k) of for all classifiers (currently k+1 trees are generated)
-      r[k] = oobee[k]; // FIXME - should be error rate on testing dataset
+      r[k] = testDataKey!=null ?
+          DIvotesTree.vote(k, job.dest(), testDataKey, drfParams._classcol, forest, testChunkRowsMapping).error()
+          : oobee[k];
       e[k] =  p* (k>0 ? e[k-1] : 0.5) + (1-p)*r[k];
       c[k] = e[k] / (1-e[k]);
       System.err.println("e["+k+"] = " + e[k]);
       System.err.println("c["+k+"] = " + c[k]);
+      System.err.println("r["+k+"] = " + r[k]);
     }
 
     System.err.println("e = " + Arrays.toString(e));
@@ -109,13 +118,21 @@ public class RFDIvotes {
     return k;
   }
 
-  static int[] computeInitRows(Key dataKey, Key[] localChunks) {
+  public static int[] computeInitRows(Key dataKey) {
+    ValueArray ary = UKV.get(dataKey);
+    Key[] keys = new Key[(int)ary.chunks()];
+    for( int i=0; i<keys.length; i++ )
+      keys[i] = ary.getChunkKey(i);
+
+    return computeInitRows(dataKey, keys, false);
+  }
+  public static int[] computeInitRows(Key dataKey, Key[] chunks, boolean onlyLocal) {
     ValueArray data = UKV.get(dataKey);
-    long l = ValueArray.getChunkIndex(localChunks[localChunks.length-1])+1;
+    long l = ValueArray.getChunkIndex(chunks[chunks.length-1])+1;
     int[] r = new int[Ints.checkedCast(l)];
     int off=0;
-    for( Key k : localChunks ) {
-      assert k.home();
+    for( Key k : chunks ) {
+      assert !onlyLocal || k.home();
       l = ValueArray.getChunkIndex(k);
       r[(int)l] = off;
       off += data.rpc(l);
