@@ -2,6 +2,7 @@ package water.api;
 
 import hex.rf.*;
 import hex.rf.DRF.DRFJob;
+import hex.rf.DRF.DRFKind;
 import hex.rf.Tree.StatType;
 
 import java.util.*;
@@ -14,6 +15,7 @@ import com.google.gson.JsonObject;
 
 public class RF extends Request {
 
+  protected final EnumArgument<DRFKind> _kind = new EnumArgument<DRFKind>(KIND, DRFKind.DIVOTES);
   protected final H2OHexKey         _dataKey    = new H2OHexKey(DATA_KEY);
   protected final H2OKey            _testKey    = new H2OKey(TEST_KEY, false);
   protected final HexKeyClassCol    _classCol   = new HexKeyClassCol(CLASS, _dataKey);
@@ -138,7 +140,8 @@ public class RF extends Request {
               0, /* verbose level is minimal here */
               exclusiveSplitLimit,
               _useNonLocalData.value(),
-              _testKey.value()
+              _testKey.value(),
+              _kind.value()
               );
       // Collect parameters required for validation.
       JsonObject response = new JsonObject();

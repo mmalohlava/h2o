@@ -53,6 +53,7 @@ public class Constants extends Iced {
   public static final String CONSENSUS             = "consensus";
   public static final String CONTENTS              = "contents";
   public static final String COUNT                 = "count";
+  public static final String KIND                  = "kind";
   public static final String DATA_KEY              = "data_key";
   public static final String TEST_KEY              = "test_key";
   public static final String DEPTH                 = "depth";

@@ -16,5 +16,5 @@ def f(ds,f): return "bench/{0}/R/{1}".format(ds,f)
 ds = DATASET_NAME
 c = r.connect()
 trainKey = c.getHexKey(f(ds, "train.csv"))
-c.trainRF(trainKey, ntree=2)
+c.trainRF(trainKey, ntree=10, model_key="rf_model")
 

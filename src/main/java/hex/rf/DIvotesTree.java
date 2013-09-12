@@ -134,6 +134,34 @@ public class DIvotesTree extends Tree {
     return result;
   }
 
+  public static Disagreement disagreement(Key modelKey, Key dataKey, int classcol) {
+    ErrorTrackingTask t = new ErrorTrackingTask(dataKey, modelKey, classcol);
+    t.invoke(dataKey);
+
+    RFModel rfModel = UKV.get(modelKey);
+    int nodes = rfModel._localForests.length;
+    int[] treesPerNode = new int[nodes];
+    for (int i=0; i<nodes; i++) treesPerNode[i] = rfModel._localForests[i].length;
+    ValueArray ary = UKV.get(dataKey);
+    int chunks = (int) ary.chunks();
+    int[] linesPerChunk = new int[chunks];
+    for (int i=0; i<chunks; i++) linesPerChunk[i] = ary.rpc(i);
+    return new Disagreement(t._home, t._nodeErrPerChunk, nodes, treesPerNode, linesPerChunk );
+  }
+
+  public static class Disagreement {
+    public int[]   _chunkHomes;
+    public int[][] _nodeErrPerChunk;
+    public int _nodes;
+    public int[] _treesPerNode;
+    public int[] _linesPerChunk;
+    public Disagreement(int[] chunkHomes, int[][] nodeErrPerChunk, int nodes, int[] treesPerNode, int[] linesPerChunk) {
+      _chunkHomes = chunkHomes; _nodeErrPerChunk = nodeErrPerChunk; _nodes = nodes;
+      _treesPerNode = treesPerNode;
+      _linesPerChunk = linesPerChunk;
+    }
+  }
+
   /** Perform voting over OOB instances.
    */
   public static class OOBVotingTask extends MRTask<OOBVotingTask> {
@@ -276,7 +304,6 @@ public class DIvotesTree extends Tree {
       _modelKey = modelKey;
       _classcol = classcol;
       _chunkRowMapping = chunkRowMapping;
-      System.err.println(trees.length + " : " + Arrays.toString(trees));
     }
 
     @Override public void init() {
@@ -336,4 +363,106 @@ public class DIvotesTree extends Tree {
       }
     }
   }
+
+  public static class ErrorTrackingTask extends MRTask<ErrorTrackingTask> {
+
+    /* @IN */
+    final Key   _dataKey;
+    /* @IN */
+    final Key   _modelKey;
+    /* @IN */
+    final int   _classcol;
+
+    /* @OUT number of erros per node forest per chunk */
+    int[][] _nodeErrPerChunk;
+    /* @OUT */
+    int[]   _home; // home node for chunk
+
+    transient ValueArray _data;
+    transient RFModel  _model;
+    transient int _N; // number of classes in response column
+    transient int _cmin;
+    transient int[] _modelColMap;
+
+    public ErrorTrackingTask(Key dataKey, Key modelKey, int classcol) {
+      super();
+      _dataKey = dataKey;
+      _modelKey = modelKey;
+      _classcol = classcol;
+    }
+
+    @Override public void init() {
+      super.init();
+      _data = UKV.get(_dataKey);
+      _model  = UKV.get(_modelKey);
+      _modelColMap = _model.columnMapping(_data.colNames());
+      // Response parameters (no values alignment !!)
+      Column[] cols = _data._cols;
+      Column respCol = cols[_classcol];
+      _N = (int) respCol.numDomainSize();
+      _cmin = (int) respCol._min;
+    }
+
+    @Override public void map(Key ckey) {
+      final AutoBuffer cdata = _data.getChunk(ckey); // data stored in chunk
+      final int cIdx = (int) ValueArray.getChunkIndex(ckey); // chunk index
+      final int rows = _data.rpc(cIdx); // rows in chunk
+      final int nodes = _model._localForests.length;
+      final int chunks = (int) _data.chunks();
+      _nodeErrPerChunk = new int[chunks][];
+      _home = new int[chunks];
+
+      _home[cIdx] = ckey.home_node().index();
+      _nodeErrPerChunk[cIdx] = new int[nodes];
+
+      for (int nodeIdx=0; nodeIdx<nodes; nodeIdx++) {
+        Key[] trees = _model._localForests[nodeIdx];
+        final int ntrees  = trees.length;
+
+        int[] votes = new int[rows];
+
+        for( int ntree=0; ntree < ntrees; ntree++ ) {
+          byte[] treeBits = DKV.get(trees[ntree]).memOrLoad(); // FIXME: cache it
+
+          ROWS: for ( int row=0; row<rows; row++) {
+            // Bail out of broken rows with NA in class column.
+            // Do not skip yet the rows with NAs in the rest of columns
+            if( _data.isNA(cdata, row, _classcol)) continue ROWS;
+            // Make a prediction for given tree and out-of-bag row
+            int prediction = Tree.classify(new AutoBuffer(treeBits), _data, cdata, row, _modelColMap, (short)_N);
+            if( prediction >= _N ) continue ROWS; // Junk row cannot be predicted
+            int dataResponse = (int) (_data.data(cdata, row, _classcol)) - _cmin;
+            if (prediction == dataResponse)
+              votes[row]++; // Vote the row
+          }
+          treeBits = null;
+        }
+
+        int majority = ntrees / 2 + 1; // 1 node, majority = 1, 2 nodes => majority 2, 3nodes = majority 2
+        int mispredRows = 0;
+        for (int r=0; r<votes.length; r++) if (votes[r] < majority) mispredRows++;
+        _nodeErrPerChunk[cIdx][nodeIdx] = mispredRows;
+      }
+    }
+
+    @Override public void reduce(ErrorTrackingTask drt) {
+      if (drt == null) return;
+      if (_home == null) {
+        assert _nodeErrPerChunk == null;
+        _home = drt._home; _nodeErrPerChunk = drt._nodeErrPerChunk;
+      } else if (drt._home!=null) {
+        assert drt._nodeErrPerChunk!=null;
+        assert drt._home.length == _home.length;
+        assert drt._nodeErrPerChunk.length == _nodeErrPerChunk.length;
+        for (int i=0; i<drt._nodeErrPerChunk.length; i++) {
+          if (drt._nodeErrPerChunk[i]!=null) {
+            assert _nodeErrPerChunk[i] == null;
+            _nodeErrPerChunk[i] = drt._nodeErrPerChunk[i];
+            _home[i] = drt._home[i];
+          }
+        }
+      }
+    }
+  }
+
 }

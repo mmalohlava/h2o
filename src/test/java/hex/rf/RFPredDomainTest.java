@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 import hex.rf.ConfusionTask.CMFinal;
 import hex.rf.ConfusionTask.CMJob;
 import hex.rf.DRF.DRFJob;
+import hex.rf.DRF.DRFKind;
 import hex.rf.Tree.StatType;
 
 import org.junit.*;
@@ -39,7 +40,7 @@ public class RFPredDomainTest extends TestUtil {
     String modelName   = "model";
     final Key modelKey = Key.make(modelName);
 
-    DRFJob drf = hex.rf.DRF.execute(modelKey,cols,trainData,trees,depth,1024,statType,seed,false, null, -1, Sampling.Strategy.RANDOM, 1.0f, null, 0, 0, false,null);
+    DRFJob drf = hex.rf.DRF.execute(modelKey,cols,trainData,trees,depth,1024,statType,seed,false, null, -1, Sampling.Strategy.RANDOM, 1.0f, null, 0, 0, false,null, DRFKind.NORMAL);
     // Block for completion
     RFModel model = drf.get();
 

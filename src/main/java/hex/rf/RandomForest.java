@@ -1,8 +1,7 @@
 package hex.rf;
 
 import hex.rf.ConfusionTask.CMFinal;
-import hex.rf.DRF.DRFJob;
-import hex.rf.DRF.DRFParams;
+import hex.rf.DRF.*;
 import hex.rf.Tree.StatType;
 import hex.rng.H2ORandomRNG.RNGKind;
 
@@ -195,7 +194,7 @@ public class RandomForest {
                           /* FIXME strata*/ null,
                           ARGS.verbose,
                           ARGS.exclusive,
-                          false, null);
+                          false, null, DRFKind.NORMAL);
     RFModel model = drfJob.get();  // block on all nodes!
     Log.debug(Sys.RANDF,"Random forest finished in TODO"/*+ drf._t_main*/);
 

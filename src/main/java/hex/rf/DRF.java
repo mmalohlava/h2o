@@ -1,5 +1,6 @@
 package hex.rf;
 
+import hex.rf.Sampling.Strategy;
 import hex.rf.Tree.StatType;
 
 import java.util.Arrays;
@@ -16,6 +17,11 @@ import water.util.Log.Tag.Sys;
 /** Distributed RandomForest */
 public abstract class DRF {
 
+  public enum DRFKind {
+    NORMAL,
+    DIVOTES;
+  }
+
   /** Create DRF task, execute it and returns DFuture.
    *
    *  Caller can block on the returned job by calling <code>job.get()</code>
@@ -24,10 +30,10 @@ public abstract class DRF {
   public static final DRFJob execute(Key modelKey, int[] cols, ValueArray ary, int ntrees, int depth, int binLimit,
       StatType stat, long seed, boolean parallelTrees, double[] classWt, int numSplitFeatures,
       Sampling.Strategy samplingStrategy, float sample, float[] strataSamples, int verbose, int exclusiveSplitLimit, boolean useNonLocalData,
-      Key testKey) {
+      Key testKey, DRFKind kind) {
 
     // Create DRF remote task
-    final DRFTask drfTask = create(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, testKey);
+    final DRFTask drfTask = create(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, testKey, kind);
     // Create DRF user job & start it
     final DRFJob  drfJob  = new DRFJob(jobName(drfTask), modelKey);
     drfJob.start(drfTask);
@@ -44,7 +50,7 @@ public abstract class DRF {
     Key modelKey, int[] cols, ValueArray ary, int ntrees, int depth, int binLimit,
     StatType stat, long seed, boolean parallelTrees, double[] classWt, int numSplitFeatures,
     Sampling.Strategy samplingStrategy, float sample, float[] strataSamples,
-    int verbose, int exclusiveSplitLimit, boolean useNonLocalData, Key testKey) {
+    int verbose, int exclusiveSplitLimit, boolean useNonLocalData, Key testKey, DRFKind kind) {
 
     // Construct the RFModel to be trained
     DRFTask drf  = new DRFTask();
@@ -54,7 +60,7 @@ public abstract class DRF {
     // But it will need to be changed with new fluid vectors
     //assert ary._rpc == null : "DRF does not support different sizes of chunks for now!";
     int numrows = (int) (ValueArray.CHUNK_SZ/ary._rowsize);
-    drf._params = DRFParams.create(cols[cols.length-1], ntrees, depth, numrows, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, testKey);
+    drf._params = DRFParams.create(cols[cols.length-1], ntrees, depth, numrows, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData, testKey, kind);
     // Verbose debug print
     if (verbose>0) dumpRFParams(modelKey, cols, ary, ntrees, depth, binLimit, stat, seed, parallelTrees, classWt, numSplitFeatures, samplingStrategy, sample, strataSamples, verbose, exclusiveSplitLimit, useNonLocalData);
     // Validate parameters
@@ -125,10 +131,16 @@ public abstract class DRF {
       // write number of split features
       updateRFModel(_job.dest(), numSplitFeatures, rkeys);
 
-      // Build local random forest
-      assert rkeys == NO_KEYS;
-      Key testKey = _params._testKey;
-      RFDIvotes.build(_job, _params, _rfmodel._dataKey, localData, ntrees, numSplitFeatures, rowsPerChunks, lkeys, testKey);
+      if (_params._kind == DRFKind.DIVOTES) {
+        // Build local random forest
+        assert _params._samplingStrategy == Strategy.RANDOM_WITH_REPLACEMENT;
+        assert rkeys == NO_KEYS;
+        Key testKey = _params._testKey;
+        RFDIvotes.build(_job, _params, _rfmodel._dataKey, localData, ntrees, numSplitFeatures, rowsPerChunks, lkeys, testKey);
+      } else {
+        assert _params._samplingStrategy != Strategy.RANDOM_WITH_REPLACEMENT;
+        RandomForest.build(_job, _params, localData, ntrees, numSplitFeatures, rowsPerChunks);
+      }
 
       // Wait for the running jobs
       tryComplete();
@@ -263,12 +275,14 @@ public abstract class DRF {
     long _seed;
     /** Test data*/
     Key _testKey;
+    /** DRF kind */
+    DRFKind _kind;
 
     public static final DRFParams create(int col, int ntrees, int depth, int numrows, int binLimit,
         StatType statType, long seed, boolean parallelTrees, double[] classWt,
         int numSplitFeatures, Sampling.Strategy samplingStrategy, float sample,
         float[] strataSamples, int verbose, int exclusiveSplitLimit,
-        boolean useNonLocalData, Key testKey) {
+        boolean useNonLocalData, Key testKey, DRFKind kind) {
 
       DRFParams drfp = new DRFParams();
       drfp._ntrees           = ntrees;
@@ -288,6 +302,7 @@ public abstract class DRF {
       drfp._numrows          = numrows;
       drfp._useNonLocalData  = useNonLocalData;
       drfp._testKey          = testKey;
+      drfp._kind             = kind;
       return drfp;
     }
   }

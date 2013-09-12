@@ -23,6 +23,9 @@ class H2OProxy(h2o.H2O):
     def scoreRF(self, testKey, trainResult, **kwargs):
         return h2o_rf.scoreRF(testKey, trainResult, node=self, timeoutSecs=self._defaultTimeout, **kwargs)
 
+    def terminate(self):
+        self.shutdown_all()
+
 def connect(ip="127.0.0.1", port=54321):
     return H2OProxy(ip, port)
 

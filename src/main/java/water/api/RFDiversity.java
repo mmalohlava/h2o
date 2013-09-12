@@ -64,17 +64,23 @@ public class RFDiversity extends Request {
     @Override public String build(Response response, JsonElement element, String contextName) {
       StringBuilder sb = new StringBuilder();
       sb.append("<h3>Diversity matrix</h3>");
-      sb.append("<table>");
+      sb.append("<table class='table table-bordered table-condensed'>");
       JsonArray matrix = (JsonArray) element;
+      int nodes = matrix.size();
+      sb.append("<tr><th>Nodes \\ Nodes</th>");
+      for (int i=0;i<nodes;i++) { sb.append("<th>").append(i).append("</th>"); }
+      sb.append("</tr>");
+      int nIdx = 0;
       for (JsonElement e : matrix) {
         JsonArray row = (JsonArray) e;
-        sb.append("<tr>");
+        sb.append("<tr><th>").append(nIdx).append("</th>");
         for (JsonElement o : row) {
           sb.append("<td>");
           toHtml(sb,o.getAsJsonObject());
           sb.append("</td>");
         }
         sb.append("</tr>");
+        nIdx++;
       }
       sb.append("</table>");
 
@@ -82,16 +88,20 @@ public class RFDiversity extends Request {
     }
 
     static void toHtml(StringBuilder sb, JsonObject o) {
-      sb.append("<table border='1'>");
-      sb.append("<tr>");
-      sb.append("<td>").append(o.get("a")).append("</td>");
-      sb.append("<td>").append(o.get("b")).append("</td>");
-      sb.append("</tr>");
-      sb.append("<tr>");
-      sb.append("<td>").append(o.get("c")).append("</td>");
-      sb.append("<td>").append(o.get("d")).append("</td>");
-      sb.append("</tr>");
-      sb.append("</table>");
+      if (o.has("a")) {
+        sb.append("<table>");
+        sb.append("<tr>");
+        sb.append("<td class='span2'>").append(o.get("a")).append("</td>");
+        sb.append("<td class='span2'>").append(o.get("b")).append("</td>");
+        sb.append("</tr>");
+        sb.append("<tr>");
+        sb.append("<td class='span2'>").append(o.get("c")).append("</td>");
+        sb.append("<td class='span2'>").append(o.get("d")).append("</td>");
+        sb.append("</tr>");
+        sb.append("</table>");
+      } else {
+        sb.append("&nbsp;");
+      }
     }
   }
 }

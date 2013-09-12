@@ -62,6 +62,7 @@ public class RequestServer extends NanoHTTPD {
 
     Request.addToNavbar(registerRequest(new RFScore()),     "Random Forest", "Score");
     Request.addToNavbar(registerRequest(new RFDiversity()), "RF Diversity",  "Score");
+    Request.addToNavbar(registerRequest(new RFDisagreement()), "RF Disagreement", "Score");
     Request.addToNavbar(registerRequest(new GLMScore()),    "GLM",           "Score");
     Request.addToNavbar(registerRequest(new KMeansScore()), "KMeans",        "Score");
     Request.addToNavbar(registerRequest(new KMeansApply()), "KMeans Apply",  "Score");
