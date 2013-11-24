@@ -23,7 +23,7 @@ import water.util.Log;
 
 public class ValueArray extends Iced implements Cloneable {
 
-  public static final int LOG_CHK = 22; // Chunks are 1<<22, or 4Meg
+  public static final int LOG_CHK = 20; // Chunks are 1<<22, or 4Meg
   public static final long CHUNK_SZ = 1L << LOG_CHK;
 
   // --------------------------------------------------------
