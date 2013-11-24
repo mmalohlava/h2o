@@ -15,7 +15,7 @@ import com.google.gson.JsonObject;
 
 public class RF extends Request {
 
-  protected final EnumArgument<DRFKind> _kind = new EnumArgument<DRFKind>(KIND, DRFKind.DIVOTES);
+  protected final EnumArgument<DRFKind> _kind = new EnumArgument<DRFKind>(KIND, DRFKind.NORMAL);
   protected final H2OHexKey         _dataKey    = new H2OHexKey(DATA_KEY);
   protected final H2OKey            _testKey    = new H2OKey(TEST_KEY, false);
   protected final HexKeyClassCol    _classCol   = new HexKeyClassCol(CLASS, _dataKey);
@@ -25,7 +25,7 @@ public class RF extends Request {
   protected final EnumArgument<StatType> _statType = new EnumArgument<Tree.StatType>(STAT_TYPE, StatType.ENTROPY);
   protected final HexColumnSelect   _ignore     = new RFColumnSelect(IGNORE, _dataKey, _classCol);
   protected final H2OCategoryWeights _weights   = new H2OCategoryWeights(WEIGHTS, _dataKey, _classCol, 1);
-  protected final EnumArgument<Sampling.Strategy> _samplingStrategy = new EnumArgument<Sampling.Strategy>(SAMPLING_STRATEGY, Sampling.Strategy.RANDOM_WITH_REPLACEMENT, true);
+  protected final EnumArgument<Sampling.Strategy> _samplingStrategy = new EnumArgument<Sampling.Strategy>(SAMPLING_STRATEGY, Sampling.Strategy.RANDOM, true);
   protected final H2OCategoryStrata               _strataSamples    = new H2OCategoryStrata(STRATA_SAMPLES, _dataKey, _classCol, 67);
   protected final Int               _sample     = new Int(SAMPLE, 67, 1, 100);
   protected final Bool              _oobee      = new Bool(OOBEE,true,"Out of bag error");
