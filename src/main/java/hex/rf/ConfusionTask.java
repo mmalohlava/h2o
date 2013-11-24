@@ -287,12 +287,27 @@ public class ConfusionTask extends MRTask {
         if (isLocalTree) localVotes[row][alignedPrediction]++; // Vote
       }
     }
+    if (!_computeOOB)
+      dumpVotes(votes, _data.startRow(nchk));
     // Assemble the votes-per-class into predictions & score each row
     _matrix = computeCM(votes, cdata); // Make a confusion matrix for this chunk
     if (localVotes!=null) {
       _localMatrices = new CM[H2O.CLOUD.size()];
       _localMatrices[H2O.SELF.index()] = computeCM(localVotes, cdata);
     }
+  }
+
+  private void dumpVotes(int[][] votes, long startRow) {
+    StringBuilder sb = new StringBuilder();
+    for (int i=0; i<votes.length; i++) {
+      sb.append(i+startRow).append(',');
+      for (int j=0; j<votes[i].length; j++) {
+        if (j>0) sb.append(',');
+        sb.append(votes[i][j]);
+      }
+      sb.append('\n');
+    }
+    System.err.println(sb.toString());
   }
 
 

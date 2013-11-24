@@ -2,27 +2,24 @@
 import os, json, unittest, time, shutil, sys
 sys.path.extend(['.','..','py'])
 
-import h2o_rf
 import repl as r
+import h2o_rf
 
-DATASET_NAME="covtype_100k"
-DATASET_NAME="iris20kcols"
-DATASET_NAME="nchess_3_8_1000"
-DATASET_NAME="nchess_4_8_1000"
-DATASET_NAME="iris"
-DATASET_NAME="covtype"
+DATASET_NAME="NoNoise/Sorted"
+DATASET_NAME="NoNoise/Unsorted"
+DATASET_NAME="Noisy/Sorted"
+DATASET_NAME="Noisy/Unsorted"
 
-def f(ds,f): return "bench/{0}/R/{1}".format(ds,f)
+def f(ds,f): return "/Users/michal/Documents/postdoc/papers/2013/201309_rf_datasets_eda/data/BiasedCycle/{0}/{1}".format(ds,f)
 
-trees=50
+trees=100
 ds = DATASET_NAME
 c = r.connect()
 trainKey = c.getHexKey(f(ds, "train.csv"))
-trainResult = c.trainRF(trainKey, ntree=trees, model_key="rf_model")
+trainResult = c.trainRF(trainKey, ntree=trees, model_key="rf_model_{0}".format(ds))
 
 testKey = c.getHexKey(f(ds, "test.csv"))
 testResult = c.scoreRF(testKey, trainResult,out_of_bag_error_estimate=0)
-
 print """
 =============
        Trees: {0}
