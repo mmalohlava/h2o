@@ -25,7 +25,7 @@ public class Inspect extends Request {
   private final Str                            _producer     = new Str(JOB, null);
   private final Int                            _max_column   = new Int(COLUMNS_DISPLAY, MAX_COLUMNS_TO_DISPLAY);
 
-  static final int MAX_COLUMNS_TO_DISPLAY = 1000;
+  static final int MAX_COLUMNS_TO_DISPLAY = 100000;
 
   static {
     _displayNames.put(ENUM_DOMAIN_SIZE, "Enum Domain");
