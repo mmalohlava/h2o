@@ -15,7 +15,7 @@ class H2OProxy(h2o.H2O):
         if header: h=1
         else: h=0
         if separator: separator = ord(separator)
-        key = h2o_cmd.parseFile(node=self, csvPathname=df, header=h, separator=separator)
+        key = h2o_cmd.parseImportedFile(node=self, csvPathname=df, header=h, separator=separator)
         return key
     
     def trainRF(self, trainKey, **kwargs):

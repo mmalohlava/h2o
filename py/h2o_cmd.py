@@ -30,6 +30,26 @@ def parseFile(node=None, csvPathname=None, key=None, key2=None,
         node.summary_page(myKey2, timeoutSecs=timeoutSecs)
     return p
 
+def parseImportedFile(node=None, csvPathname=None, key=None, key2=None, 
+    timeoutSecs=30, retryDelaySecs=0.5, pollTimeoutSecs=30,
+    noise=None, noPoll=None, doSummary=True, **kwargs):
+    if not csvPathname: raise Exception('No file name specified')
+    if not node: node = h2o.nodes[0]
+    ### print "parseFile pollTimeoutSecs:", pollTimeoutSecs
+    keys = node.import_files(csvPathname, timeoutSecs=timeoutSecs)
+    key = keys['keys'][0]
+    if key2 is None:
+        # don't rely on h2o default key name
+        myKey2 = key + '.hex'
+    else:
+        myKey2 = key2
+    p = node.parse(key, myKey2, 
+        timeoutSecs, retryDelaySecs, 
+        pollTimeoutSecs=pollTimeoutSecs, noise=noise, noPoll=noPoll, **kwargs)
+
+    return p
+
+
 def parseS3File(node=None, bucket=None, filename=None, keyForParseResult=None, 
     timeoutSecs=20, retryDelaySecs=2, pollTimeoutSecs=30, 
     noise=None, noPoll=None, **kwargs):
