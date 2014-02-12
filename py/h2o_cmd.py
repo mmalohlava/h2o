@@ -10,7 +10,7 @@ def dataDistrib(node=None, key=None):
 
 # header, separator, exclude params are passed thru kwargs to node.parse
 def parseFile(node=None, csvPathname=None, key=None, key2=None, 
-    timeoutSecs=30, retryDelaySecs=0.5, pollTimeoutSecs=30,
+    timeoutSecs=300, retryDelaySecs=0.5, pollTimeoutSecs=30,
     noise=None, noPoll=None, doSummary=True, **kwargs):
     if not csvPathname: raise Exception('No file name specified')
     if not node: node = h2o.nodes[0]
@@ -31,7 +31,7 @@ def parseFile(node=None, csvPathname=None, key=None, key2=None,
     return p
 
 def parseImportedFile(node=None, csvPathname=None, key=None, key2=None, 
-    timeoutSecs=30, retryDelaySecs=0.5, pollTimeoutSecs=30,
+    timeoutSecs=300, retryDelaySecs=0.5, pollTimeoutSecs=30,
     noise=None, noPoll=None, doSummary=True, **kwargs):
     if not csvPathname: raise Exception('No file name specified')
     if not node: node = h2o.nodes[0]
