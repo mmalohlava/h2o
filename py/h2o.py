@@ -733,6 +733,7 @@ class H2O(object):
             log('Start ' + url + paramsStr)
 
         # file get passed thru kwargs here
+        # print 'post: ', url, timeout, params, kwargs
         if cmd=='post':
             r = requests.post(url, timeout=timeout, params=params, **kwargs)
         else:
@@ -744,12 +745,13 @@ class H2O(object):
 
         # this is used to open a browser on results, or to redo the operation in the browser
         # we don't' have that may urls flying around, so let's keep them all
+
         json_url_history.append(r.url)
         if not beta_features and not r.json():
             raise Exception("Maybe bad url? no r.json in __do_json_request in %s:" % inspect.stack()[1][3])
             
         rjson = r.json()
-
+        # print 'rjson: ', rjson
         for e in ['error', 'Error', 'errors', 'Errors']:
             if e in rjson:
                 verboseprint(dump_json(rjson))

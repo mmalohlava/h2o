@@ -10,12 +10,12 @@ class H2OProxy(h2o.H2O):
         self._defaultTimeout = 14800
         h2o.clean_sandbox()
 
-    def getHexKey(self, f, header=True, separator=None):
+    def getHexKey(self, f, header=True, **kwargs):
         df = h2o.find_dataset(f)
         if header: h=1
         else: h=0
-        if separator: separator = ord(separator)
-        key = h2o_cmd.parseImportedFile(node=self, csvPathname=df, header=h, separator=separator)
+        if 'separator' in kwargs: kwargs['separator'] = ord(kwargs['separator'])
+        key = h2o_cmd.parseImportedFile(node=self, csvPathname=df, header=h, **kwargs)
         return key
     
     def trainRF(self, trainKey, **kwargs):
