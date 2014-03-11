@@ -113,7 +113,6 @@ def verboseprint(*args, **kwargs):
 def find_dataset(f):
     # (head, tail) = os.path.split(os.path.abspath('datasets'))
     (head, tail) = os.path.split(os.path.abspath(f))
-
     verboseprint("find_dataset looking upwards from", head, "for", tail)
     # don't spin forever 
     levels = 0
