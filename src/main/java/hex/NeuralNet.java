@@ -164,7 +164,7 @@ public class NeuralNet extends Job {
 
     @Override public String toString() {
       DecimalFormat format = new DecimalFormat("0.000");
-      return format.format(100 * Value) + "% (d²:" + SqrDist + ")";
+      return format.format(100 * Value) + "% (d:" + SqrDist + ")";
     }
   }
 
