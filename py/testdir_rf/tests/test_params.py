@@ -28,12 +28,13 @@ def p_results(result):
     data += 'total\t%s\t%s\n' % ('\t'.join(map(str, colTots)), sum(colTots))
     data += '\nTime  : %.4fs' % result['python_call_timer']
     data += h2o_rf.pp_rf_result(result)
-    print data
+    # print data
     return data
 
 DATASET_NAME="ebird"
 
 def fG(ds, f): return "/Users/jreese/Google Drive/RF/%s/%s" % (ds, f)
+def fP(ds, f): return '/homes/reese5/research/h2o/smalldata/%s/%s' % (ds, f)
 def f(ds,f): return "/Users/jreese/Documents/uni/purdue/research/dr-api-mock/RF/data/%s/%s" % (DATASET_NAME, f)
 
 ds = DATASET_NAME
@@ -42,12 +43,14 @@ c = r.connect()
 trees=10
 
 print '\nParsing training data...',
-trainKey = c.getHexKey(f(ds, "train_10k.csv"),parser_type='CSV',separator=',')
-# trainKey = c.getHexKey(f(ds, "train_1M.csv"),parser_type='CSV',separator=',')
+trainKey = c.getHexKey(fP(ds,"train_10K.csv"),parser_type='CSV',separator=',')
+# trainKey = c.getHexKey(f(ds,"train_10k.csv"),parser_type='CSV',separator=',')
+# trainKey = c.getHexKey(f(ds,"train_1M.csv"),parser_type='CSV',separator=',')
 
 print '\nParsing testing data...',
 # testkey = c.getHexKey(f(ds, "test_400K.csv"),parser_type='CSV',separator=',')
-testkey = c.getHexKey(f(ds, "test_4K.csv"),parser_type='CSV',separator=',')
+# testkey = c.getHexKey(f(ds, "test_4K.csv"),parser_type='CSV',separator=',')
+testkey = c.getHexKey(fP(ds, "test_4K.csv"),parser_type='CSV',separator=',')
 
 print 'Training...'
 trainResult = c.trainRF(trainKey, ntree=trees,

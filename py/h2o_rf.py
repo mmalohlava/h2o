@@ -212,11 +212,11 @@ def pp_rf_result(rf):
         c += 1
 
     return """
- Leaves: {0} / {1} / {2}
-  Depth: {3} / {4} / {5}
-   mtry: {6}
-   Type: {7}
-    Err: {8} %
+Leaves: {0} / {1} / {2}
+Depth : {3} / {4} / {5}
+mtry  : {6}
+Type  : {7}
+Err   : {8} %
 """.format(
         rf['trees']['leaves']['min'],
         rf['trees']['leaves']['mean'],

@@ -27,6 +27,6 @@ class H2OProxy(h2o.H2O):
     def terminate(self):
         self.shutdown_all()
 
-def connect(ip="127.0.0.1", port=54321):
+def connect(ip="128.10.12.201", port=54321):
     return H2OProxy(ip, port)
 
