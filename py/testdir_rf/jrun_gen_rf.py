@@ -20,8 +20,9 @@ ds = DATASET_NAME
 c = r.connect()
 
 # trainKey = c.getHexKey(fP(ds,"train_1K.csv"),parser_type='CSV',separator=',')
-trainKey = c.getHexKey(fP(ds,"train_1M.csv"),parser_type='CSV',separator=',')
+# trainKey = c.getHexKey(fP(ds,"train_1M.csv"),parser_type='CSV',separator=',')
 # trainKey = c.getHexKey(f(ds,"train_1M.csv"),parser_type='CSV',separator=',')
+trainKey = c.getHexKey(f(ds,"train_10K.csv"),parser_type='CSV',separator=',')
 # trainKey = c.getHexKey(fG(ds,"train.csv"),parser_type='CSV',separator=',')
 
 trainResult = c.trainRF(trainKey, ntree=trees,

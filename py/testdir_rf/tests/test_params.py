@@ -1,9 +1,18 @@
 #!/usr/bin/python 
-import os, json, unittest, time, shutil, sys
+import os, json, unittest, time, shutil, sys, subprocess
 sys.path.extend(['..','../..','py'])
 
 import repl as r
 import h2o_rf
+
+DATASET_NAME="ebird"
+
+def fG(ds, f): return "/Users/jreese/Google Drive/RF/%s/%s" % (ds, f)
+def fP(ds, f): return '/homes/reese5/research/h2o/smalldata/%s/%s' % (ds, f)
+def fJ(ds,f): return "/Users/jreese/Documents/uni/purdue/research/dr-api-mock/RF/data/%s/%s" % (ds, f)
+
+fout = open('../../../out', 'w')
+ferr = open('../../../err', 'w')
 
 def p_results(result):
     data = ''
@@ -31,37 +40,75 @@ def p_results(result):
     # print data
     return data
 
-DATASET_NAME="ebird"
+def start_h2o():
 
-def fG(ds, f): return "/Users/jreese/Google Drive/RF/%s/%s" % (ds, f)
-def fP(ds, f): return '/homes/reese5/research/h2o/smalldata/%s/%s' % (ds, f)
-def f(ds,f): return "/Users/jreese/Documents/uni/purdue/research/dr-api-mock/RF/data/%s/%s" % (DATASET_NAME, f)
+    try:
+        return subprocess.Popen(['java', '-Xmx8g', '-jar',
+                              '../../../target/h2o.jar'],
+                                 stdout=fout, stderr=ferr)
+    except OSError as e:
+        print 'Failed to start h2o (%s): %s' % (e.errno, e.strerror)
+        exit()
 
-ds = DATASET_NAME
-c = r.connect()
+def main():
+    h2o_p = start_h2o()
+    time.sleep(2)
 
-trees=10
+    try:
+        fd = open('errs.csv','w')
+        ds = DATASET_NAME
+        c = r.connect()
 
-print '\nParsing training data...',
-trainKey = c.getHexKey(fP(ds,"train_10K.csv"),parser_type='CSV',separator=',')
-# trainKey = c.getHexKey(f(ds,"train_10k.csv"),parser_type='CSV',separator=',')
-# trainKey = c.getHexKey(f(ds,"train_1M.csv"),parser_type='CSV',separator=',')
+        perr = 0.0
+        cerr = 0.1
+        trees=10
 
-print '\nParsing testing data...',
-# testkey = c.getHexKey(f(ds, "test_400K.csv"),parser_type='CSV',separator=',')
-# testkey = c.getHexKey(f(ds, "test_4K.csv"),parser_type='CSV',separator=',')
-testkey = c.getHexKey(fP(ds, "test_4K.csv"),parser_type='CSV',separator=',')
+        print '\nParsing training data...',
+        # trainKey=c.getHexKey(fP(ds,"train_10K.csv"),parser_type='CSV',
+        # separator=',')
+        trainKey=c.getHexKey(fJ(ds,"train_10k.csv"),parser_type='CSV',
+                             separator=',')
+        
+        print '\nParsing testing data...',
+        testkey = c.getHexKey(fJ(ds,"test_4K.csv"),parser_type='CSV',
+                              separator=',')
+        while (abs(cerr - perr) > 0.001):
+            # trainKey=c.getHexKey(fJ(ds,"train_1M.csv"),parser_type='CSV',
+            # separator=',')
+            # testkey=c.getHexKey(fJ(ds,"test_400K.csv"),parser_type='CSV',
+            #                     separator=',')
+            # testkey = c.getHexKey(fP(ds,"test_4K.csv"),parser_type='CSV',
+            # separator=',')
+            
+            print '\nTraining with trees = %s' % trees,
+            trainResult = c.trainRF(trainKey, ntree=trees,
+                                    model_key="rf_model_{0}".format(ds))
+            
+            print 'Testing...'
+            testResult = c.scoreRF(testkey,trainResult,out_of_bag_error_estimate=0)
 
-print 'Training...'
-trainResult = c.trainRF(trainKey, ntree=trees,
-                        model_key="rf_model_{0}".format(ds))
+            print 'testResult'
+            print testResult.keys()
+            p_results(testResult)
+            with open('results/%st.txt' % trees, 'w') as f:
+                f.write(p_results(testResult))
+            trees += 25
+            perr = cerr
+            cerr = testResult['confusion_matrix']['classification_error']
+            fd.write('%s,%.2f\n' % (trees, cerr*100))
+            
+            print cerr, perr, abs(cerr - perr)
+        h2o_p.kill()
+        fout.close()
+        ferr.close()
+        fd.close()
+    except:
+        print '\nException raised (%s)' % sys.exc_info()[0]
+        fout.close()
+        ferr.close()
+        fd.close()
+        h2o_p.kill()
+        raise
 
-print 'Testing...'
-testResult = c.scoreRF(testkey, trainResult, out_of_bag_error_estimate=0)
-
-print testResult
-p_results(testResult)
-with open('%st.txt' % trees, 'w') as f:
-    f.write(p_results(testResult))
-
-
+if __name__ == '__main__':
+    main()
