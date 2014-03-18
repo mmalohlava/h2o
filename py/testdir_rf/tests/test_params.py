@@ -41,7 +41,6 @@ def p_results(result):
     return data
 
 def start_h2o():
-
     try:
         return subprocess.Popen(['java', '-Xmx8g', '-jar',
                               '../../../target/h2o.jar'],
@@ -55,49 +54,52 @@ def main():
     time.sleep(2)
 
     try:
-        fd = open('errs.csv','w')
+        fd = open('errs.csv','a',0)
         ds = DATASET_NAME
         c = r.connect()
 
         perr = 0.0
         cerr = 0.1
-        trees=10
+        trees = [100] + range(125,1000,25)
+        # trees = [1] + range(25,1000,25)
+        t=0
+        params = {'separator':',', 'parser_type':'CSV'}
 
         print '\nParsing training data...',
-        # trainKey=c.getHexKey(fP(ds,"train_10K.csv"),parser_type='CSV',
-        # separator=',')
-        trainKey=c.getHexKey(fJ(ds,"train_10k.csv"),parser_type='CSV',
-                             separator=',')
+        # trainKey=c.getHexKey(fP(ds,"train_10K.csv"),kwargs=params)
+        trainKey=c.getHexKey(fP(ds,"train_1M.csv"),kwargs=params)
+        # trainKey=c.getHexKey(fJ(ds,"train_10k.csv"),kwargs=params)
+        # trainKey=c.getHexKey(fJ(ds,"train_1M.csv"),kwargs=params)
         
         print '\nParsing testing data...',
-        testkey = c.getHexKey(fJ(ds,"test_4K.csv"),parser_type='CSV',
-                              separator=',')
-        while (abs(cerr - perr) > 0.001):
-            # trainKey=c.getHexKey(fJ(ds,"train_1M.csv"),parser_type='CSV',
-            # separator=',')
-            # testkey=c.getHexKey(fJ(ds,"test_400K.csv"),parser_type='CSV',
-            #                     separator=',')
-            # testkey = c.getHexKey(fP(ds,"test_4K.csv"),parser_type='CSV',
-            # separator=',')
+        # testkey = c.getHexKey(fJ(ds,"test_4K.csv"),kwargs=params)
+        # testkey=c.getHexKey(fJ(ds,"test_400K.csv"),kwargs=params)
+        # testkey = c.getHexKey(fP(ds,"test_4K.csv"),kwargs=params)
+        testkey = c.getHexKey(fP(ds,"test_400K.csv"),kwargs=params)
+
+        while (abs(cerr - perr) > 0.001 and t < len(trees)):
             
-            print '\nTraining with trees = %s' % trees,
-            trainResult = c.trainRF(trainKey, ntree=trees,
+            print '\nTraining with trees = %s' % trees[t],
+            trainResult = c.trainRF(trainKey, ntree=trees[t],
                                     model_key="rf_model_{0}".format(ds))
             
             print 'Testing...'
-            testResult = c.scoreRF(testkey,trainResult,out_of_bag_error_estimate=0)
+            testResult=c.scoreRF(testkey,trainResult,out_of_bag_error_estimate=0)
 
-            print 'testResult'
-            print testResult.keys()
             p_results(testResult)
-            with open('results/%st.txt' % trees, 'w') as f:
-                f.write(p_results(testResult))
-            trees += 25
+            with open('results/%st.txt' % trees[t], 'w') as f:
+                f.write('%.2f\n%s' % (trainResult['python_call_timer'],
+                                      p_results(testResult)))
             perr = cerr
             cerr = testResult['confusion_matrix']['classification_error']
-            fd.write('%s,%.2f\n' % (trees, cerr*100))
+            fd.write('%s,%.2f,%.2f\n' % (
+                trees[t], cerr*100,
+                trainResult['python_call_timer']))
+            fd.flush()
             
-            print cerr, perr, abs(cerr - perr)
+            print cerr, perr, abs(cerr - perr), t, len(trees)
+            t+=1
+
         h2o_p.kill()
         fout.close()
         ferr.close()

@@ -14,7 +14,11 @@ class H2OProxy(h2o.H2O):
         df = h2o.find_dataset(f)
         if header: h=1
         else: h=0
-        if 'separator' in kwargs: kwargs['separator'] = ord(kwargs['separator'])
+        kwargs = kwargs['kwargs']
+        print kwargs
+
+        if 'separator' in kwargs and isinstance(kwargs['separator'],basestring):
+            kwargs['separator'] = ord(kwargs['separator']) 
         key = h2o_cmd.parseImportedFile(node=self, csvPathname=df, header=h, **kwargs)
         return key
     
