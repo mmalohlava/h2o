@@ -1058,8 +1058,9 @@ class H2O(object):
     # noise is a 2-tuple: ("StoreView",params_dict)
     
     def parse(self, key, key2=None, 
-        timeoutSecs=300, retryDelaySecs=0.2, initialDelaySecs=None, pollTimeoutSecs=180,
-        noise=None, benchmarkLogging=None, noPoll=False, **kwargs):
+              timeoutSecs=300, retryDelaySecs=0.2, initialDelaySecs=None,
+              pollTimeoutSecs=180, noise=None, benchmarkLogging=None,
+              noPoll=False, **kwargs):
         browseAlso = kwargs.pop('browseAlso',False)
         # this doesn't work. webforums indicate max_retries might be 0 already? (as of 3 months ago)
         # requests.defaults({max_retries : 4})

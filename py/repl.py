@@ -17,9 +17,11 @@ class H2OProxy(h2o.H2O):
         kwargs = kwargs['kwargs']
         print kwargs
 
-        if 'separator' in kwargs and isinstance(kwargs['separator'],basestring):
+        if 'separator' in kwargs and \
+                isinstance(kwargs['separator'],basestring):
             kwargs['separator'] = ord(kwargs['separator']) 
-        key = h2o_cmd.parseImportedFile(node=self, csvPathname=df, header=h, **kwargs)
+        key = h2o_cmd.parseImportedFile(node=self, csvPathname=df,
+                                        header=h, **kwargs)
         return key
     
     def trainRF(self, trainKey, **kwargs):
