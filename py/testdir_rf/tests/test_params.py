@@ -78,8 +78,6 @@ def main():
         # trainKey=c.getHexKey(fJ(ds,"train_1M.csv"),kwargs=params)
         # trainKey=c.getHexKey(fP(ds,"train_10K.csv"),kwargs=params)
         # trainKey=c.getHexKey(fP(ds,"train_1M.csv"),kwargs=params)
-        print trainKey
-        exit()
             
         print '\nParsing testing data...',
         testkey = c.getHexKey(fJ(ds,"test_4K.csv"),kwargs=params)
@@ -94,6 +92,8 @@ def main():
             trainResult = c.trainRF(trainKey, ntree=trees[t],
                                     model_key="rf_model_{0}".format(ds))
 
+            print trainResult
+            exit()
             print 'Testing...'
             testResult=c.scoreRF(testkey,trainResult,out_of_bag_error_estimate=0)
 
