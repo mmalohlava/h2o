@@ -14,9 +14,9 @@ def fJ(ds,f): return "/Users/jreese/Documents/uni/purdue/research/dr-api-mock/RF
 fout = open('../../../out', 'w')
 ferr = open('../../../err', 'w')
 
-trees = [1] + range(25,1000,25)
+trees = [1] + range(25,100,25)
 samples = range(1,101)
-mtry = [-1]
+mtry = range(1,1778)
 
 def p_results(result):
     data = ''
@@ -54,70 +54,64 @@ def start_h2o():
         exit()
 
 def main():
-    if len(sys.argv) < 2:
-        print 'Usage: python test_params <run_type>[t,s,m]'
-        exit()
-    run = sys.argv[1]
     h2o_p = start_h2o()
     time.sleep(3)
 
     try:
-        if run=='t': fd = open('errs_t.csv','a',0)
-        elif run=='s': fd = open('errs_s.csv','a',0)
-        elif run=='m': fd = open('errs_m.csv','a',0)
+        fd = open('data.csv','a',0)
         ds = DATASET_NAME
         c = r.connect()
 
-        perr = 0.0
-        cerr = 0.1
-        t=s=m=0
-        params = {'separator':',', 'parser_type':'CSV', 'sample':1}
+        # perr = 0.0
+        # cerr = 0.1
+        # t=s=m=0
+        params = {'separator':',', 'parser_type':'CSV'}
 
         print '\nParsing training data...',
-        trainKey=c.getHexKey(fJ(ds,"train_10k.csv"),kwargs=params)
+        # trainKey=c.getHexKey(fJ(ds,"train_10k.csv"),kwargs=params)
         # trainKey=c.getHexKey(fJ(ds,"train_1M.csv"),kwargs=params)
         # trainKey=c.getHexKey(fP(ds,"train_10K.csv"),kwargs=params)
-        # trainKey=c.getHexKey(fP(ds,"train_1M.csv"),kwargs=params)
+        trainKey=c.getHexKey(fP(ds,"train_1M.csv"),kwargs=params)
             
         print '\nParsing testing data...',
-        testkey = c.getHexKey(fJ(ds,"test_4K.csv"),kwargs=params)
+        # testkey = c.getHexKey(fJ(ds,"test_4K.csv"),kwargs=params)
         # testkey=c.getHexKey(fJ(ds,"test_400K.csv"),kwargs=params)
         # testkey = c.getHexKey(fP(ds,"test_4K.csv"),kwargs=params)
-        # testkey = c.getHexKey(fP(ds,"test_400K.csv"),kwargs=params)
+        testkey = c.getHexKey(fP(ds,"test_400K.csv"),kwargs=params)
 
-        while (abs(cerr - perr) > 0.001):
-            
-            print '\nTraining with trees = %s samples = %s' % \
-                (trees[t], samples[s])
-            trainResult = c.trainRF(trainKey, ntree=trees[t],
-                                    model_key="rf_model_{0}".format(ds))
+        # while (abs(cerr - perr) > 0.001):
+        for t in trees:
+            for s in samples:
+                for m in mtry:
+                    print '\nTraining with trees=%s samples=%s mtry=%s' % \
+                        (t, s, m)
+                    trainResult = c.trainRF(trainKey, ntree=trees[t],
+                                            model_key="rf_model_%s" % ds,
+                                            sample=s,features=m)
+                    
+                    print 'Testing...'
+                    testResult=c.scoreRF(testkey,trainResult,
+                                         out_of_bag_error_estimate=0)
+                    
+                    p_results(testResult)
+                    with open('results/%st_%ss_%sm.txt' % \
+                                  (t, s, m), 'w') as f:
+                        f.write('%.2f\n%s' % (trainResult['python_call_timer'],
+                                              p_results(testResult)))
+                    fd.write('%s,%s,%s,%.2f,%.2f\n' % (
+                            t, s, m,
+                            testResult['confusion_matrix']\
+                                ['classification_error']*100,
+                            trainResult['python_call_timer']))
+                    fd.flush()
 
-            print trainResult
-            exit()
-            print 'Testing...'
-            testResult=c.scoreRF(testkey,trainResult,out_of_bag_error_estimate=0)
-
-            p_results(testResult)
-            with open('results/%st_%ss_%sm.txt' % \
-                          (trees[t], samples[s], mtry[m]), 'w') as f:
-                f.write('%.2f\n%s' % (trainResult['python_call_timer'],
-                                      p_results(testResult)))
-            perr = cerr
-            cerr = testResult['confusion_matrix']['classification_error']
-            fd.write('%s,%.2f,%.2f\n' % (
-                trees[t], cerr*100,
-                trainResult['python_call_timer']))
-            fd.flush()
-
-            print cerr, perr, abs(cerr - perr), t, len(trees)
-            if run=='t': t+=1
-            elif run=='s': s+=1
-            elif run=='m': m+=1
-
+            # perr = cerr
+            # print cerr, perr, abs(cerr - perr), t, len(trees)
             # check for break conditions
-            if run=='t' and t>=len(trees): break
-            if run=='s' and s>=len(samples): break
-            if run=='m' and m>=len(trees): break
+            # cerr = testResult['confusion_matrix']['classification_error']
+            # if run=='t' and t>=len(trees): break
+            # if run=='s' and s>=len(samples): break
+            # if run=='m' and m>=len(trees): break
 
         h2o_p.kill()
         fout.close()
