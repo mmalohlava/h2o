@@ -102,6 +102,8 @@ public class RFView extends /* Progress */ Request {
     r.addProperty(     CLASS, _classCol.value());
     r.addProperty( NUM_TREES, model._totalTrees);
     r.addProperty(      MTRY, model._splitFeatures);
+    r.addProperty(SAMPLING_STRATEGY, model._samplingStrategy.toString());
+    r.addProperty(    SAMPLE, model._sample);
     r.addProperty(MTRY_NODES, Arrays.toString(model._nodesSplitFeatures));
     r.addProperty(     OOBEE, _oobee.value());
     // CM specific options
