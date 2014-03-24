@@ -1,6 +1,6 @@
 from pylab import *
 
-with open('errs.csv') as f:
+with open('s_log.csv') as f:
     data = f.readlines()
 
 pdata = []
@@ -18,7 +18,7 @@ print x
 print y
 print z
 plt.plot(x, y,'.-')
-plt.xlabel('# of trees')
+plt.xlabel('Samples (%)')
 plt.ylabel('% correct')
 plt.axis([0, max(x)+5, min(y)-.2, max(y)+.1])
 # show()
@@ -26,5 +26,5 @@ plt.savefig('e_plot.png')
 plt.clf()
 plt.plot(x,z,'.-')
 plt.ylabel('Time to train (s)')
-plt.xlabel('# of trees')
-plt.savefig('t_plot.png')
+plt.xlabel('Samples (%)')
+plt.savefig('s_plot.png')

@@ -6,17 +6,17 @@ sys.path.extend(['..','../..','py'])
 import repl as r
 
 ds="ebird"
-samples = range(50,101,5)
+samples = range(55,101,5)
     
 def main():
     try:
-        fd = open('log.csv','a',0)
+        fd = open('s_log.csv','a',0)
         h2o_p = connect(ds)
         c = r.connect()
         trainKey, testKey = parse(c, ds)
 
         s=0
-        while s < range(len(samples)):
+        while s < range(len(samples)-1):
             print '\nTraining with trees=%s samples=%s mtry=%s' % \
                 (TREES, samples[s], -1)
             try:
@@ -45,7 +45,6 @@ def main():
                 c = r.connect()
                 continue
             s+=1
-            cleanup(h2o_p, fd)
                     
         cleanup(h2o_p, fd)
 

@@ -60,12 +60,11 @@ def p_results(result, t, s, m, fd, trainResult):
     # print data
     with open('results/%st_%ss_%sm.txt' % (t, s, m),
               'w') as f:
-        print f
         f.write('%.2f\n%s' % (trainResult['python_call_timer'], data))
     fd.write('%s,%s,%s,%.2f,%.2f\n' % (
         t, s, m,
         result['confusion_matrix']['classification_error']*100,
-        result['python_call_timer']))
+        trainResult['python_call_timer']))
     fd.flush()
 
 def start_h2o():
