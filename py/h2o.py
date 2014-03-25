@@ -1171,6 +1171,7 @@ class H2O(object):
             timeout=timeoutSecs, 
             params={"path": path}
         )
+        print a
         verboseprint("\nimport_files result:", dump_json(a))
         return a
 

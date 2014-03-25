@@ -7,7 +7,7 @@ import h2o_rf
 
 ds=''
 
-TREES=75
+TREES=50
 
 def fG(ds, f): return "/Users/jreese/Google Drive/RF/%s/%s" % (ds, f)
 def fP(ds, f): return '/homes/reese5/research/h2o/smalldata/%s/%s' % (ds, f)
@@ -30,6 +30,22 @@ def cleanup(h2o_p, fd):
         h2o_p.kill()
         fout.close()
         ferr.close()
+        fd.close()
+    except:
+        dump()
+
+def cleanup_d(h2o_p, fd):
+    try:
+        try:
+            for p in h2o_p:
+                p.kill()
+        except:
+            pass
+        os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
+        for f in fout:
+            f.close()
+        for f in ferr:
+            f.close()
         fd.close()
     except:
         dump()
@@ -67,14 +83,37 @@ def p_results(result, t, s, m, fd, trainResult):
         trainResult['python_call_timer']))
     fd.flush()
 
-def start_h2o():
-    try:
-        return subprocess.Popen(['java', '-Xmx32g', '-jar',
-                              '../../../target/h2o.jar'],
-                                stdout=fout, stderr=ferr)
-    except OSError as e:
-        print 'Failed to start h2o (%s): %s' % (e.errno, e.strerror)
-        exit()
+def p_results_d(result, t, nodes, fd, trainResult):
+    data = ''
+    for c,e in zip(result['confusion_matrix']['header'],
+                   result['confusion_matrix']['classes_errors']):
+        data += 'class %s errorPct: %.2f\n' % (c, e*100)
+    data += '\nConfusion matrix:\n\t'
+    data += '%s\t' % ('\t'.join(result['confusion_matrix']['header']))
+    # for v in result['confusion_matrix']['header']: data += '%s\t' % v
+    data += 'total\n'
+
+    rowTots = [ sum(y) for y in result['confusion_matrix']['scores'] ]
+    colTots = map(sum, zip(*result['confusion_matrix']['scores']))
+
+    for v,i in zip(result['confusion_matrix']['scores'],
+                   range(len(result['confusion_matrix']['scores']))):
+        data += '%s\t' % result['confusion_matrix']['header'][i]
+        for col in v:
+            data += '%s\t' % col
+        
+        data += '%s\n' % rowTots[i]
+    data += 'total\t%s\t%s\n' % ('\t'.join(map(str, colTots)), sum(colTots))
+    data += '\nTime  : %.4fs' % result['python_call_timer']
+    data += h2o_rf.pp_rf_result(result)
+    # print data
+    with open('results/%st_%sn.txt' % (t, nodes),
+              'w') as f:
+        f.write('%.2f\n%s' % (trainResult['python_call_timer'], data))
+    fd.write('%s,%s,%.2f,%.2f\n' % (
+        t, nodes, result['confusion_matrix']['classification_error']*100,
+        trainResult['python_call_timer']))
+    fd.flush()
 
 def parse(c, ds):
     print '\nParsing training data...',
@@ -113,6 +152,85 @@ def restart(h2o_p):
         else:
             return trainKey, testKey, h2o_p, c
     
+def restart(h2o_p):
+    try:
+        h2o_p.kill()
+    except:
+        pass
+        
+    while True:
+        try:
+            time.sleep(5)
+            h2o_p = start_h2o()
+            time.sleep(5)
+            c = r.connect()
+            trainKey, testKey = parse(c, ds)
+            
+        except:
+            dump()
+            h2o_p.kill()
+            os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*')
+
+        else:
+            return trainKey, testKey, h2o_p, c
+    
+def restart_d(h2o_p):
+    try:
+        for p in h2o_p:
+            p.kill()
+    except:
+        pass
+        
+    while True:
+        try:
+            time.sleep(5)
+            h2o_p = start_h2o_d(len(h2o_p))
+            time.sleep(5)
+            c = r.connect()
+            trainKey, testKey = parse(c, ds)
+            
+        except:
+            dump()
+            h2o_p.kill()
+            os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*')
+
+        else:
+            return trainKey, testKey, h2o_p, c
+    
+def start_h2o():
+    try:
+        return subprocess.Popen(['java', '-Xmx32g', '-jar',
+                              '../../../target/h2o.jar'],
+                                stdout=fout, stderr=ferr)
+    except OSError as e:
+        print 'Failed to start h2o (%s): %s' % (e.errno, e.strerror)
+        exit()
+
+def start_h2o_d(nodes):
+    global fout, ferr
+    if isinstance(fout, list):
+        for f in fout: f.close()
+        for f in ferr: f.close()
+    else:
+        fout.close()
+        ferr.close()
+    fout = []
+    ferr = []
+    for i in range(nodes):
+        fout.append(open('../../../out%s' % i, 'w'))
+        ferr.append(open('../../../err%s' % i, 'w'))
+    h2o_p = []
+    try:
+        for n in range(nodes):
+            h2o_p.append(subprocess.Popen(['java', '-Xmx8g', '-jar',
+                                           '../../../target/h2o.jar'],
+                                          stdout=fout[n], stderr=ferr[n]))
+            time.sleep(.5)
+        return h2o_p
+        
+    except OSError as e:
+        print 'Failed to start h2o (%s): %s' % (e.errno, e.strerror)
+        exit()
 
 def connect(d):
     global ds
@@ -122,3 +240,10 @@ def connect(d):
 
     return h2o_p
 
+def connect_d(d, nodes):
+    global ds
+    ds = d
+    h2o_p = start_h2o_d(nodes)
+    time.sleep(5)
+
+    return h2o_p

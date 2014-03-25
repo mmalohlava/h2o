@@ -36,6 +36,7 @@ def parseImportedFile(node=None, csvPathname=None, key=None, key2=None,
     if not csvPathname: raise Exception('No file name specified')
     if not node: node = h2o.nodes[0]
     ### print "parseFile pollTimeoutSecs:", pollTimeoutSecs
+    print csvPathname
     keys = node.import_files(csvPathname, timeoutSecs=timeoutSecs)
     key = keys['keys'][0]
     if key2 is None:

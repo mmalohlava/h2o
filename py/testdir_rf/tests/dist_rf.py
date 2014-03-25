@@ -6,28 +6,27 @@ sys.path.extend(['..','../..','py'])
 import repl as r
 
 ds="ebird"
-mtry = range(15,500,5)
-    
+
+NODES=range(9,17)
+
 def main():
     try:
-        fd = open('m_log.csv','a',0)
-        h2o_p = connect(ds)
+        fd = open('dist_log.csv','a',0)
+        h2o_p = connect_d(ds, NODES[0])
         c = r.connect()
         trainKey, testKey = parse(c, ds)
-
-        m=0
-        while m < len(mtry)-1:
-            print '\nTraining with trees=%s samples=%s mtry=%s' % \
-                (TREES, .67, mtry[m])
+        n=0
+        while n < len(NODES):
+            print '\nTraining with trees=%s nodes=%s' % \
+                (TREES, NODES[n])
             try:
                 trainResult = c.trainRF(trainKey, ntree=TREES,
-                                        model_key="rf_model_%s" % ds,
-                                        features=mtry[m])
+                                        model_key="rf_model_%s" % ds)
 
             except:
                 dump()
                 # cleanup and start again
-                trainKey, testKey, h2o_p, c = restart(h2o_p)
+                trainKey, testKey, h2o_p, c = restart_d(h2o_p)
                 c = r.connect()
                 continue
             try:
@@ -35,22 +34,23 @@ def main():
                 testResult=c.scoreRF(testKey,trainResult,
                                      out_of_bag_error_estimate=0)
 
-                p_results(testResult, TREES, 67, mtry[m], fd, trainResult)
+                p_results_d(testResult, TREES, NODES[n], fd, trainResult)
                 
             except:
                 dump()
                 # cleanup and start again
-                trainKey, testKey, h2o_p, c = restart(h2o_p)
+                trainKey, testKey, h2o_p, c = restart_d(h2o_p)
                 c = r.connect()
                 continue
-            m+=1
-                    
-        cleanup(h2o_p, fd)
+            n+=1
+            h2o_p.append(0)
+            restart_d(h2o_p)
+        cleanup_d(h2o_p, fd)
 
     except:
         print '\n%sTerminating Exception Raised!!!!%s\n' % ('*'*20,'*'*20)
         dump()
-        cleanup(h2o_p, fd)
+        cleanup_d(h2o_p, fd)
 
 if __name__ == '__main__':
     main()

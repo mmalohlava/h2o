@@ -26,3 +26,7 @@ target/
 /libpeerconnection.log
 src/main/java/water/BuildVersion.java
 hadoop/build.log
+py/testdir_rf/tests/results
+err*
+out*
+smalldata/ebird

@@ -6,7 +6,7 @@ sys.path.extend(['..','../..','py'])
 import repl as r
 
 ds="ebird"
-samples = range(55,101,5)
+samples = range(50,101,5)
     
 def main():
     try:
@@ -16,7 +16,7 @@ def main():
         trainKey, testKey = parse(c, ds)
 
         s=0
-        while s < range(len(samples)-1):
+        while s < len(samples)-1:
             print '\nTraining with trees=%s samples=%s mtry=%s' % \
                 (TREES, samples[s], -1)
             try:
