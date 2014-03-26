@@ -7,8 +7,6 @@ import h2o_rf
 
 ds=''
 
-TREES=50
-
 def fG(ds, f): return "/Users/jreese/Google Drive/RF/%s/%s" % (ds, f)
 def fP(ds, f): return '/homes/reese5/research/h2o/smalldata/%s/%s' % (ds, f)
 def fJ(ds,f): return "/Users/jreese/Documents/uni/purdue/research/dr-api-mock/RF/data/%s/%s" % (ds, f)
@@ -16,6 +14,7 @@ def fJ(ds,f): return "/Users/jreese/Documents/uni/purdue/research/dr-api-mock/RF
 fout = open('../../../out', 'w')
 ferr = open('../../../err', 'w')
 
+# TREES=50
 TREES = 75
 
 params = {'separator':',', 'parser_type':'CSV'}
