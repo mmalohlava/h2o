@@ -1,30 +1,67 @@
+import sys
 from pylab import *
 
-with open('s_log.csv') as f:
-    data = f.readlines()
+TREES=0
+SAMPLES=1
+MTRY=2
+ERR=3
+TIME=4
+COLS=5
+NODES=1
+ERR_D=2
+TIME_D=3
+COLS_D=4
+if sys.argv[1] == 'samples':
+    with open('s_log.csv') as f:
+        data = f.readlines()
+    pdata = []
+    for d in data:
+        d = d.strip('\n').split(',')
+        pdata.append(int(d[TREES]))
+        pdata.append(int(d[SAMPLES]))
+        pdata.append(int(d[MTRY]))
+        pdata.append(100-float(d[ERR]))
+        pdata.append(float(d[TIME]))
+        
+    x = pdata[SAMPLES::COLS]
+    y = pdata[ERR::COLS]
+    z = pdata[TIME::COLS]
 
-pdata = []
-for d in data:
-    d = d.strip('\n').split(',')
-    pdata.append(int(d[0]))
-    pdata.append(100-float(d[1]))
-    pdata.append(float(d[2]))
+elif sys.argv[1] == 'dist':
+    with open('dist_log.csv') as f:
+        data = f.readlines()
+    pdata = []
+    for d in data:
+        d = d.strip('\n').split(',')
+        pdata.append(int(d[TREES]))
+        pdata.append(int(d[NODES]))
+        pdata.append(100-float(d[ERR_D]))
+        pdata.append(float(d[TIME_D]))
+        
+    x = pdata[NODES::COLS_D]
+    y = pdata[ERR_D::COLS_D]
+    z = pdata[TIME_D::COLS_D]
 
-print pdata    
-x = pdata[::3]
-y = pdata[1::3]
-z = pdata[2::3]
-print x
-print y
-print z
-plt.plot(x, y,'.-')
-plt.xlabel('Samples (%)')
+plt.plot(x,y,'.-')
+if sys.argv[1] == 'samples':
+    plt.xlabel('Samples (%)')
+elif sys.argv[1] == 'dist':
+    plt.xlabel('Nodes')
+    
 plt.ylabel('% correct')
 plt.axis([0, max(x)+5, min(y)-.2, max(y)+.1])
 # show()
-plt.savefig('e_plot.png')
+if sys.argv[1] == 'samples':
+    plt.savefig('plot_s_e.png')
+elif sys.argv[1] == 'dist':
+    plt.savefig('plot_n_e.png')
 plt.clf()
+
 plt.plot(x,z,'.-')
 plt.ylabel('Time to train (s)')
-plt.xlabel('Samples (%)')
-plt.savefig('s_plot.png')
+if sys.argv[1] == 'samples':
+    plt.xlabel('Samples (%)')
+    plt.savefig('plot_s_t.png')
+elif sys.argv[1] == 'dist':
+    plt.xlabel('Nodes')
+    plt.savefig('plot_n_t.png')
