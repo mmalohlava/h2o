@@ -25,8 +25,8 @@ def dump():
     
 def cleanup(h2o_p, fd):
     try:
-        os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*')
         h2o_p.kill()
+        os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
         fout.close()
         ferr.close()
         fd.close()
@@ -40,7 +40,11 @@ def cleanup_d(h2o_p, fd):
                 p.kill()
         except:
             pass
-        os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
+        try:
+            os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
+        except:
+            dump()
+            
         for f in fout:
             f.close()
         for f in ferr:
@@ -132,6 +136,7 @@ def parse(c, ds):
 def restart(h2o_p):
     try:
         h2o_p.kill()
+        os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
     except:
         pass
         
@@ -146,29 +151,7 @@ def restart(h2o_p):
         except:
             dump()
             h2o_p.kill()
-            os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*')
-
-        else:
-            return trainKey, testKey, h2o_p, c
-    
-def restart(h2o_p):
-    try:
-        h2o_p.kill()
-    except:
-        pass
-        
-    while True:
-        try:
-            time.sleep(5)
-            h2o_p = start_h2o()
-            time.sleep(5)
-            c = r.connect()
-            trainKey, testKey = parse(c, ds)
-            
-        except:
-            dump()
-            h2o_p.kill()
-            os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*')
+            os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
 
         else:
             return trainKey, testKey, h2o_p, c
@@ -177,6 +160,7 @@ def restart_d(h2o_p):
     try:
         for p in h2o_p:
             p.kill()
+        os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
     except:
         pass
         
@@ -190,8 +174,9 @@ def restart_d(h2o_p):
             
         except:
             dump()
-            h2o_p.kill()
-            os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*')
+            for p in h2o_p:
+                p.kill()
+            os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
 
         else:
             return trainKey, testKey, h2o_p, c

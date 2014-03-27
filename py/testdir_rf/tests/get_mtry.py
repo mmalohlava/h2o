@@ -16,7 +16,7 @@ def main():
         trainKey, testKey = parse(c, ds)
 
         m=0
-        while m < len(mtry)-1:
+        while m < len(mtry):
             print '\nTraining with trees=%s samples=%s mtry=%s' % \
                 (TREES, .67, mtry[m])
             try:
@@ -44,7 +44,9 @@ def main():
                 c = r.connect()
                 continue
             m+=1
-                    
+            if (m < len(mtry)):
+                trainKey, testKey, h2o_p, c = restart(h2o_p)
+                c = r.connect()
         cleanup(h2o_p, fd)
 
     except:

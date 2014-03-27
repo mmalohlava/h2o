@@ -6,7 +6,7 @@ sys.path.extend(['..','../..','py'])
 import repl as r
 
 ds="ebird"
-samples = range(50,101,5)
+samples = range(50,101)
     
 def main():
     try:
@@ -16,7 +16,7 @@ def main():
         trainKey, testKey = parse(c, ds)
 
         s=0
-        while s < len(samples)-1:
+        while s < len(samples):
             print '\nTraining with trees=%s samples=%s mtry=%s' % \
                 (TREES, samples[s], -1)
             try:
@@ -45,7 +45,9 @@ def main():
                 c = r.connect()
                 continue
             s+=1
-                    
+            if (s < len(samples)): 
+                trainKey, testKey, h2o_p, c = restart(h2o_p)
+                c = r.connect()
         cleanup(h2o_p, fd)
 
     except:

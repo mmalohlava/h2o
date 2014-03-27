@@ -7,7 +7,7 @@ import repl as r
 
 ds="ebird"
 
-NODES=range(1,2)
+NODES=range(1,17)
 
 def main():
     try:
