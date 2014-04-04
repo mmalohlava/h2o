@@ -6,7 +6,7 @@ sys.path.extend(['..','../..','py'])
 import repl as r
 
 ds="ebird"
-mtry = range(10,100,5)
+mtry = range(50,51)
     
 def main():
     try:
