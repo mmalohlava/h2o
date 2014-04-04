@@ -120,16 +120,16 @@ def p_results_d(result, t, nodes, fd, trainResult):
 
 def parse(c, ds):
     print '\nParsing training data...',
-    trainKey=c.getHexKey(fJ(ds,"train_10k.csv"),kwargs=params)
+    # trainKey=c.getHexKey(fJ(ds,"train_10k.csv"),kwargs=params)
     # trainKey=c.getHexKey(fJ(ds,"train_1M.csv"),kwargs=params)
     # trainKey=c.getHexKey(fP(ds,"train_10K.csv"),kwargs=params)
-    # trainKey=c.getHexKey(fP(ds,"train_1M.csv"),kwargs=params)
+    trainKey=c.getHexKey(fP(ds,"train_1M.csv"),kwargs=params)
     
     print '\nParsing testing data...',
-    testKey = c.getHexKey(fJ(ds,"test_4K.csv"),kwargs=params)
+    # testKey = c.getHexKey(fJ(ds,"test_4K.csv"),kwargs=params)
     # testKey=c.getHexKey(fJ(ds,"test_400K.csv"),kwargs=params)
     # testKey = c.getHexKey(fP(ds,"test_4K.csv"),kwargs=params)
-    # testKey = c.getHexKey(fP(ds,"test_400K.csv"),kwargs=params)
+    testKey = c.getHexKey(fP(ds,"test_400K.csv"),kwargs=params)
 
     return trainKey, testKey
 

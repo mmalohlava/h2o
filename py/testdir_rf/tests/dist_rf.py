@@ -7,7 +7,8 @@ import repl as r
 
 ds="ebird"
 
-NODES=range(1,17)
+NODES=range(18,19)
+MTRY=50
 
 def main():
     try:
@@ -21,13 +22,13 @@ def main():
                 (TREES, NODES[n])
             try:
                 trainResult = c.trainRF(trainKey, ntree=TREES,
-                                        model_key="rf_model_%s" % ds)
+                                        model_key="rf_model_%s" % ds,
+                                        features=MTRY)
 
             except:
                 dump()
                 # cleanup and start again
                 trainKey, testKey, h2o_p, c = restart_d(h2o_p)
-                c = r.connect()
                 continue
             try:
                 print 'Testing...'
@@ -40,7 +41,6 @@ def main():
                 dump()
                 # cleanup and start again
                 trainKey, testKey, h2o_p, c = restart_d(h2o_p)
-                c = r.connect()
                 continue
             n+=1
             h2o_p.append(0)
