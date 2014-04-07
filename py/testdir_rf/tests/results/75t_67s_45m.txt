@@ -1,0 +1,16 @@
+1181.92
+class 0 errorPct: 9.44
+class 1 errorPct: 31.08
+
+Confusion matrix:
+	0	1	total
+0	248155	25862	274017
+1	39136	86773	125909
+total	287291	112635	399926
+
+Time  : 7.8080s
+Leaves: 223238.0 / 226980.970588 / 232358.0
+Depth : 210.0 / 252.882352941 / 361.0
+mtry  : 45
+Type  : full scoring
+Err   : 16.252507 %
