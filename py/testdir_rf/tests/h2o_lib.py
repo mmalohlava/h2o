@@ -42,6 +42,7 @@ def cleanup_d(h2o_p, fd):
             pass
         try:
             os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
+            os.system('rm ../../../out* ../../../err*')
         except:
             dump()
             
@@ -157,12 +158,16 @@ def restart(h2o_p):
             return trainKey, testKey, h2o_p, c
     
 def restart_d(h2o_p):
-    try:
-        for p in h2o_p:
+    for p in h2o_p:
+        try:
             p.kill()
+        except:
+            pass
+    try:
         os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
+        os.system('rm ../../../out* ../../../err*')
     except:
-        pass
+        dump()
         
     while True:
         try:
