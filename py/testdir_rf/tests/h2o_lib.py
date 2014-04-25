@@ -112,7 +112,7 @@ def cleanup_p(h2o_p, fd):
         except:
             pass
         try:
-            os.system('rm -rf /tmp/h2o*; rm -rf /tmp/ice*; pkill -f h2o.jar')
+            os.system('rm -rf /tmp/h2o-temp*; rm -rf /tmp/ice*; pkill -f h2o.jar')
             os.system('rm ../../../out* ../../../err*')
         except:
             dump()
