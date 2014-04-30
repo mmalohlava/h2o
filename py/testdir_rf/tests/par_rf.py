@@ -7,8 +7,7 @@ import repl as r
 
 ds="ebird"
 
-NODES=range(33,55,1)
-NODES=filter(lambda x: x not in range(36,55,5), NODES)
+NODES=range(1,56,1)
 
 MTRY=50
 
