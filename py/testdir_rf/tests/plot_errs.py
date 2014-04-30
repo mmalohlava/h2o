@@ -65,12 +65,31 @@ elif sys.argv[1] == 'dist':
     y = pdata[ERR_D::COLS_D]
     z = pdata[TIME_D::COLS_D]
 
+elif sys.argv[1] == 'par' or sys.argv[1] == 'divotes':
+    if sys.argv[1] == 'par':
+        with open('par_log.csv') as f:
+            data = f.readlines()
+    else:
+        with open('divotes_log.csv') as f:
+            data = f.readlines()
+    pdata = []
+    for d in data:
+        d = d.strip('\n').split(',')
+        pdata.append(int(d[TREES]))
+        pdata.append(int(d[NODES]))
+        pdata.append(100-float(d[ERR_D]))
+        pdata.append(float(d[TIME_D]))
+        
+    x = pdata[NODES::COLS_D]
+    y = pdata[ERR_D::COLS_D]
+    z = pdata[TIME_D::COLS_D]
+
 plt.plot(x,y,'.-')
 if sys.argv[1] == 'samples':
     plt.xlabel('Samples (%)')
 elif sys.argv[1] == 'mtry':
     plt.xlabel('mtry value')
-elif sys.argv[1] == 'dist':
+elif sys.argv[1] == 'dist' or sys.argv[1] == 'par' or sys.argv[1] == 'divotes':
     plt.xlabel('Nodes')
     
 plt.ylabel('% correct')
@@ -78,21 +97,41 @@ plt.axis([0, max(x)+5, min(y)-.2, max(y)+.1])
 
 # show()
 if sys.argv[1] == 'samples':
+    plt.title('samples accuracy')
     plt.savefig('plot_s_e.png')
 elif sys.argv[1] == 'mtry':
+    plt.title('mtry accuracy')
     plt.savefig('plot_m_e.png')
 elif sys.argv[1] == 'dist':
+    plt.title('Distributed accuracy')
     plt.savefig('plot_n_e.png')
+elif sys.argv[1] == 'divotes':
+    plt.title('DIVotes accuracy')
+    plt.savefig('plot_d_e.png')
+elif sys.argv[1] == 'par':
+    plt.title('Parallel accuracy')
+    plt.savefig('plot_p_e.png')
 plt.clf()
 
 plt.plot(x,z,'.-')
 plt.ylabel('Time to train (s)')
 if sys.argv[1] == 'samples':
+    plt.title('samples time')
     plt.xlabel('Samples (%)')
     plt.savefig('plot_s_t.png')
 elif sys.argv[1] == 'mtry':
+    plt.title('mtry time')
     plt.xlabel('mtry value')
     plt.savefig('plot_m_t.png')
 elif sys.argv[1] == 'dist':
+    plt.title('Distributed time')
     plt.xlabel('Nodes')
     plt.savefig('plot_n_t.png')
+elif sys.argv[1] == 'divotes':
+    plt.title('DIVotes time')
+    plt.xlabel('Nodes')
+    plt.savefig('plot_d_t.png')
+elif sys.argv[1] == 'par':
+    plt.title('Parallel time')
+    plt.xlabel('Nodes')
+    plt.savefig('plot_p_t.png')
